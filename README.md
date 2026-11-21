@@ -184,7 +184,7 @@ See [`docs/integration-guide.md`](docs/integration-guide.md) for an outline Clay
 - Add a real `DiscoveryProvider` (start with a Crunchbase / BuiltIn fixture → live API).
 - Implement a HubSpot or Salesforce `CRMAdapter` reusing the external_ref idempotency pattern.
 - Extend `evaluate_entry` with your organization's own hard policies.
-- Write your own `GTMContext` in `config/gtm-context.yaml` for your actual ICP.
+- Write your own `GTMContext` in `config/gtm-context.yaml` for your actual ICP. Every setting, its demo value and its effect are listed in [`docs/configuration.md`](docs/configuration.md). The demo values (50¢ budget, 10¢ per call, 5 LLM calls) only exist to trigger the test scenarios; they are not recommendations.
 
 ## Repository layout
 
@@ -212,6 +212,7 @@ agentic-gtm-systems-lab/
 ├── docs/
 │   ├── architecture.md
 │   ├── concepts.md
+│   ├── configuration.md          every setting, its default and what it does
 │   ├── failure-scenarios.md
 │   ├── integration-guide.md
 │   └── adr/                      architectural decision records

@@ -88,7 +88,7 @@ def demo(
     offline: bool = typer.Option(True, "--offline/--agentic", help="Offline deterministic demo (default)."),
     example_dir: Path = typer.Option(DEFAULT_EXAMPLE, "--example-dir", help="Path to the example workflow."),
     state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir", help="Where to persist run state."),
-    limit: int = typer.Option(50, "--limit"),
+    limit: int = typer.Option(50, "--limit", help="Max accounts requested from the discovery provider."),
     max_llm_calls: int = typer.Option(5, "--max-llm-calls", help="Hard cap on LLM calls (agentic mode)."),
     max_llm_cents: int = typer.Option(50, "--max-llm-cents", help="Hard cap on LLM spend in cents."),
 ):

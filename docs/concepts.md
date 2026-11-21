@@ -12,7 +12,7 @@ The firmographic shape of a company worth talking to. In this repo: an employee 
 
 ## Buyer persona
 
-A named role within an ICP account that the GTM team wants to find a contact for. Here: "VP Sales", "Head of Sales", etc. Each persona carries a set of title substrings to match against.
+A named role within an ICP account that the GTM team wants to find a contact for. Here: "VP Sales", "Head of Sales", etc. The persona name is what the enrichment provider is asked for. Each persona also lists title substrings (`titles_any_of`), which no code reads yet; they are there for a real provider adapter.
 
 ## Buying signal
 

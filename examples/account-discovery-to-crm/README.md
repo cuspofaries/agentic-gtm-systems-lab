@@ -32,3 +32,7 @@ gtm-lab eval <run-id>                  # run integrity checks
 
 See `expected-results/summary.md` for the exact metrics any run of this fixture
 should produce. The integration test `tests/integration/test_offline_demo.py` asserts them.
+
+## Changing the settings
+
+The budget, ICP bounds, evidence floor and other values in `config/gtm-context.yaml` are demo values chosen to trigger the test scenarios. See [`docs/configuration.md`](../../docs/configuration.md) for what each one does.

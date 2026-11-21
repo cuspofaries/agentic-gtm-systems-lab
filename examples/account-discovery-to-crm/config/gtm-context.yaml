@@ -1,3 +1,5 @@
+# Demo values chosen to exercise the test scenarios, not recommendations.
+# Every key is documented in docs/configuration.md.
 version: "1.0.0"
 company_positioning: |
   Fictional US B2B SaaS startup selling a sales-onboarding platform.
@@ -38,7 +40,7 @@ exclusions:
     industry_keywords: ["consulting", "agency"]
 
 policy:
-  enrichment_budget_cents: 50   # $0.50 - fits 5 enrichment calls at 10¢ each
+  enrichment_budget_cents: 50   # demo value: 5 calls at the fixture's 10¢, runs out on purpose. See docs/configuration.md
   require_signal_for_qualification: false
   require_approval_before_crm_write: true
   min_evidence_count: 2
