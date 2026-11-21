@@ -98,8 +98,8 @@ pytest -q                     # 47 tests pass
 Example output from `gtm-lab demo --offline`:
 
 ```
-Plan proposed: run_id=run_
-Review artifact → .gtm-lab-state/review_run_.md
+Plan proposed: run_id=run_20261121T215033Z
+Review artifact → .gtm-lab-state/review_run_20261121T215033Z.md
 
                                     Entries
 ┌─────────────┬────────────────┬──────────┬─────────────────┬─────────────────┐
