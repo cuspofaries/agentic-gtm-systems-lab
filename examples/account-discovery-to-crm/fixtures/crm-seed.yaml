@@ -1,0 +1,9 @@
+# Pre-existing CRM state, loaded into the mock CRM before a run.
+# Used to exercise the "already in CRM" scenario.
+#
+# Each row becomes one `crm_account` with a deterministic external_ref.
+accounts:
+  - domain: axiom.saas.example
+    name: Axiom Workflow (seeded)
+    source: seed
+    external_ref: seed:axiom.saas.example

@@ -1,0 +1,147 @@
+# Synthetic companies used to exercise each of the 12 named scenarios.
+# None of these are real customers; the data is didactic.
+#
+# Scenario mapping:
+#   acc_001 - ICP match (qualifies, new in CRM)
+#   acc_002 - non-ICP (wrong industry: agency)
+#   acc_003 - already in CRM (see examples/.../fixtures/crm-seed.yaml)
+#   acc_004 / acc_004_dup - duplicate rows for the same company
+#   acc_005 - missing employee data (insufficient_evidence)
+#   acc_006 - stale buying signal (older than 90d)
+#   acc_007 - ICP match, no signal, above min_evidence (qualifies)
+#   acc_008 - ICP match where provider returns an incomplete contact (no email)
+#   acc_009 - ICP match whose enrichment call pushes us over budget
+#   acc_010 - ICP match where the CRM first write fails (fault injection in tests)
+
+source_failures:
+  - "linkedin_sales_navigator:429 rate_limit"
+
+accounts:
+  - account_id: acc_001
+    domain: brightpath.saas.example
+    name: Brightpath Analytics
+    employees: 85
+    employees_confidence: verified
+    industry: B2B SaaS Software
+    hq_country: US
+    hq_state: CA
+    source_provider: fixture-discovery
+    source_url: null
+    observed_at: "2026-11-15T10:00:00Z"
+    signals:
+      - kind: new_sales_leadership
+        description: "Hired new VP Sales (press release)"
+        event_date: "2026-11-01T00:00:00Z"
+        confidence: verified
+        source_provider: fixture-discovery
+        source_url: "https://example.invalid/pr/brightpath-vp-sales"
+
+  - account_id: acc_002
+    domain: pinnacle.agency.example
+    name: Pinnacle Marketing Agency
+    employees: 50
+    employees_confidence: secondary
+    industry: Marketing Agency Consulting
+    hq_country: US
+    hq_state: NY
+    signals: []
+
+  - account_id: acc_003
+    domain: axiom.saas.example
+    name: Axiom Workflow
+    employees: 140
+    employees_confidence: verified
+    industry: B2B SaaS Software
+    hq_country: US
+    hq_state: WA
+    signals:
+      - kind: sales_hiring
+        description: "Hiring 3 AE roles"
+        event_date: "2026-10-20T00:00:00Z"
+        confidence: secondary
+
+  - account_id: acc_004
+    domain: nimbus.saas.example
+    name: Nimbus Cloud
+    employees: 120
+    employees_confidence: verified
+    industry: Cloud SaaS Technology
+    hq_country: US
+    hq_state: TX
+    signals: []
+
+  - account_id: acc_004_dup
+    domain: nimbus.saas.example
+    name: Nimbus Cloud Inc.
+    employees: 130
+    employees_confidence: approx
+    industry: Cloud SaaS Technology
+    hq_country: US
+    hq_state: TX
+    signals: []
+    fields_missing: []
+
+  - account_id: acc_005
+    domain: unknownco.saas.example
+    name: Unknownco SaaS
+    employees: null
+    employees_confidence: unknown
+    industry: B2B SaaS Software
+    hq_country: US
+    hq_state: null
+    fields_missing: ["employees", "hq_state"]
+    signals: []
+
+  - account_id: acc_006
+    domain: oldsignal.saas.example
+    name: Oldsignal Platform
+    employees: 60
+    employees_confidence: verified
+    industry: B2B SaaS Software
+    hq_country: US
+    hq_state: MA
+    signals:
+      - kind: new_sales_leadership
+        description: "Hired VP Sales 180 days ago"
+        event_date: "2026-05-01T00:00:00Z"
+        confidence: verified
+
+  - account_id: acc_007
+    domain: silentwave.saas.example
+    name: Silentwave Systems
+    employees: 95
+    employees_confidence: verified
+    industry: B2B SaaS Software
+    hq_country: US
+    hq_state: CO
+    signals: []
+
+  - account_id: acc_008
+    domain: incomplete.saas.example
+    name: Incomplete Record Co
+    employees: 70
+    employees_confidence: verified
+    industry: B2B SaaS Software
+    hq_country: US
+    hq_state: IL
+    signals: []
+
+  - account_id: acc_009
+    domain: ninthbudget.saas.example
+    name: Ninth Budget Corp
+    employees: 110
+    employees_confidence: verified
+    industry: B2B SaaS Software
+    hq_country: US
+    hq_state: GA
+    signals: []
+
+  - account_id: acc_010
+    domain: failwrite.saas.example
+    name: Failwrite LLC
+    employees: 44
+    employees_confidence: verified
+    industry: B2B SaaS Software
+    hq_country: US
+    hq_state: OR
+    signals: []

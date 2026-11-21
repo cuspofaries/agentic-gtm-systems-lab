@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: lint + tests + offline scenario
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Unit + integration + scenario tests (incl. no-network check)
+        run: pytest -q
+
+      - name: Run offline demo scenario
+        run: |
+          rm -rf .gtm-lab-state
+          gtm-lab demo --offline --limit 50
+          RUN_ID=$(gtm-lab runs | head -1)
+          [ -n "$RUN_ID" ] || (echo "No run_id produced"; exit 1)
+          gtm-lab approve "$RUN_ID"
+          gtm-lab sync "$RUN_ID"
+          gtm-lab sync "$RUN_ID"  # second sync must be all no-ops
+          gtm-lab eval "$RUN_ID"  # exits non-zero on any integrity failure
+
+      - name: Agentic mode without credentials falls back cleanly
+        run: |
+          gtm-lab demo --agentic --state-dir /tmp/agentic-check | tee /tmp/agentic.log
+          grep -q "no LLM was called" /tmp/agentic.log

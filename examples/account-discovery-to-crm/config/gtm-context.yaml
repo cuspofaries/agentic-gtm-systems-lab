@@ -1,0 +1,45 @@
+version: "1.0.0"
+company_positioning: |
+  Fictional US B2B SaaS startup selling a sales-onboarding platform.
+  Target: VP Sales, Head of Sales, Revenue Operations, Sales Enablement at
+  mid-size B2B SaaS companies with a sales-assisted motion.
+
+icp:
+  employees_min: 20
+  employees_max: 200
+  industry_keywords:
+    - saas
+    - software
+    - technology
+  geographies:
+    - US
+  sales_motion: sales-assisted B2B
+
+personas:
+  - name: VP Sales
+    titles_any_of: ["vp sales", "vice president, sales", "vp of sales"]
+  - name: Head of Sales
+    titles_any_of: ["head of sales"]
+  - name: Revenue Operations
+    titles_any_of: ["revenue operations", "revops", "rev ops"]
+  - name: Sales Enablement
+    titles_any_of: ["sales enablement"]
+
+signal_policy:
+  relevant_kinds: ["sales_hiring", "new_sales_leadership", "revenue_expansion"]
+  max_signal_age_days: 90
+
+exclusions:
+  - name: not-for-profit
+    reason: Out of ICP by motion; no revenue team.
+    industry_keywords: ["nonprofit", "non-profit"]
+  - name: consulting-agencies
+    reason: Services businesses, not SaaS.
+    industry_keywords: ["consulting", "agency"]
+
+policy:
+  enrichment_budget_cents: 50   # $0.50 - fits 5 enrichment calls at 10¢ each
+  require_signal_for_qualification: false
+  require_approval_before_crm_write: true
+  min_evidence_count: 2
+  require_contact_email_for_create: false

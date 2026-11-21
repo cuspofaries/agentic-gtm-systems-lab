@@ -1,0 +1,60 @@
+# Synthetic enrichment fixture.
+# Emails are intentionally on `example.invalid` (RFC 6761) - never deliverable.
+
+fails_for_domains: []
+
+by_domain:
+  brightpath.saas.example:
+    "VP Sales":
+      - first_name: Riley
+        last_name: Hall
+        title: VP Sales
+        email: riley.hall@example.invalid
+        verified: true
+    "Revenue Operations":
+      - first_name: Sam
+        last_name: Ortiz
+        title: RevOps Lead
+        email: sam.ortiz@example.invalid
+        verified: true
+
+  nimbus.saas.example:
+    "Head of Sales":
+      - first_name: Alex
+        last_name: Rowe
+        title: Head of Sales
+        email: alex.rowe@example.invalid
+        verified: false
+
+  silentwave.saas.example:
+    "VP Sales":
+      - first_name: Jamie
+        last_name: Park
+        title: VP Sales
+        email: jamie.park@example.invalid
+        verified: true
+
+  incomplete.saas.example:
+    "VP Sales":
+      # Intentionally missing email - exercises the "incomplete contact" scenario
+      - first_name: Pat
+        last_name: Doe
+        title: VP Sales
+        email: null
+        verified: false
+
+  ninthbudget.saas.example:
+    "VP Sales":
+      - first_name: Lee
+        last_name: Monroe
+        title: VP Sales
+        email: lee.monroe@example.invalid
+        verified: true
+
+  failwrite.saas.example:
+    "VP Sales":
+      - first_name: Toni
+        last_name: Barnes
+        title: VP Sales
+        email: toni.barnes@example.invalid
+        verified: true
