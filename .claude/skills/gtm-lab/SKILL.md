@@ -84,8 +84,12 @@ State the evidence for each finding. Never modify state to fix it.
 ### sync <run-id>
 
 1. Run `gtm-lab inspect <run-id>`. Sync requires `approved` (or `partial`/`failed` for a retry). If the plan is `proposed`, say it must be approved first.
-2. Say what will happen: writes to the **local mock CRM** (`summary.paths.crm_db`), not a real CRM; already-written records are skipped.
+2. Say what will happen, from `summary.crm_target`: either the **local mock CRM** (`summary.paths.crm_db`), or a **real HubSpot portal** (`summary.crm` = `hubspot`): say that plainly. Already-written records are skipped.
 3. Ask for confirmation, then run `gtm-lab sync <run-id> --json` and report `counts` and `status_after`. A confirmation counts only if it was given for syncing this run while its status allowed it. Never carry over a confirmation given before approval.
+
+## HubSpot
+
+`gtm-lab demo --crm hubspot` reconciles against a real HubSpot portal and needs `HUBSPOT_SERVICE_KEY`. Run it only if the user asks for it. Planning only reads HubSpot; the sync of an approved HubSpot plan writes to it. See `docs/hubspot.md`.
 
 ## LLM mode
 

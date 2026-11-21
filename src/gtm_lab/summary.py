@@ -13,9 +13,11 @@ from pathlib import Path
 from .observability.events import EventRecorder
 from .persistence.store import RunStore
 
+CRM_LABELS = {"mock": "local mock CRM (SQLite)", "hubspot": "HubSpot portal (real CRM)"}
+
 NEXT_STEPS = {
     "proposed": "Review the artifact, then `gtm-lab approve <run-id>` or `gtm-lab reject <run-id>`.",
-    "approved": "Approved, nothing written yet. `gtm-lab sync <run-id>` writes to the local mock CRM.",
+    "approved": "Approved, nothing written yet. `gtm-lab sync <run-id>` writes to the CRM in `crm_target`.",
     "synced": "Done. Re-running `gtm-lab sync <run-id>` is a no-op.",
     "partial": "Some writes failed or went stale. See `write_results`; re-run `gtm-lab sync <run-id>` for failed writes, re-plan stale ones.",
     "failed": "Every write failed. See `write_results`, fix the cause, then re-run `gtm-lab sync <run-id>`.",
@@ -57,7 +59,8 @@ def run_summary(run_id: str, state_dir: Path) -> dict | None:
         "llm_calls_made": len(fallbacks),
         "plan_status": status,
         "next_step": NEXT_STEPS.get(status, ""),
-        "crm_target": "local mock CRM (SQLite)",
+        "crm": plan.crm_target,
+        "crm_target": CRM_LABELS.get(plan.crm_target, plan.crm_target),
         "paths": paths,
         "review_artifact_exists": Path(paths["review_artifact"]).exists(),
         "discovery": {

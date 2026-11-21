@@ -45,3 +45,10 @@ policy:
   require_approval_before_crm_write: true
   min_evidence_count: 2
   require_contact_email_for_create: false
+
+# Only used with `--crm hubspot`.
+crm:
+  # HubSpot portals with GDPR enabled require a legal basis on every contact.
+  # The fixture contacts are fictional people, so "Not applicable" is the truthful value.
+  # For real contacts this is a compliance decision: set your own value.
+  hubspot_contact_legal_basis: "Not applicable"

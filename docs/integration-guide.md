@@ -103,19 +103,14 @@ class ClayDiscoveryProvider(DiscoveryProvider):
 
 ### CRM
 
-```python
-from gtm_lab.crm.base import CRMAdapter
+A real adapter ships for HubSpot: `src/gtm_lab/crm/hubspot.py`, documented in [`hubspot.md`](hubspot.md). Use it as the template for another CRM (Salesforce, Pipedrive...). The parts that carry the guarantees:
 
-class HubSpotAdapter(CRMAdapter):
-    def find_accounts_by_domain(self, domain: str) -> list[CRMAccount]:
-        resp = self._hubspot.companies.search(domain=domain)
-        return [self._hs_to_crm_account(h) for h in resp]
+- `name`: recorded on each plan, so a plan is only ever synced to the CRM it was reconciled against.
+- `find_account_by_external_ref` / `find_contact_by_external_ref`: a direct lookup on a unique custom field. This is what makes re-syncs no-ops.
+- `create_account`: refuse (non-retriable `CRMError`) when another record owns the domain; treat a unique-field conflict as "already written".
+- Map rate limits and 5xx to `CRMError(retriable=True)`, other client errors to `retriable=False`.
 
-    def create_account(self, *, domain, name, source, external_ref) -> CRMAccount:
-        # HubSpot: use `idempotencyKey` on POST /crm/v3/objects/companies
-        # or a prior GET by external_ref property.
-        ...
-```
+Check your CRM's real behavior before relying on it. HubSpot, for instance, accepts duplicate domains and its search lags writes by a few seconds; both are documented in `hubspot.md`.
 
 ### Enrichment
 

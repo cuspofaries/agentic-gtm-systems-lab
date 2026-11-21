@@ -1,10 +1,19 @@
 """GTM context layer - versioned, structured, agent-readable business knowledge."""
 
 from .loader import load_context
-from .models import BuyerPersona, ExclusionRule, GTMContext, ICPBand, Policy, SignalPolicy
+from .models import (
+    BuyerPersona,
+    CRMSettings,
+    ExclusionRule,
+    GTMContext,
+    ICPBand,
+    Policy,
+    SignalPolicy,
+)
 
 __all__ = [
     "BuyerPersona",
+    "CRMSettings",
     "ExclusionRule",
     "GTMContext",
     "ICPBand",

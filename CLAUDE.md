@@ -16,12 +16,13 @@ Installed by `pip install -e ".[dev]"` into `.venv` (use `.venv/bin/gtm-lab` if 
 | Command | Effect |
 |---|---|
 | `gtm-lab demo --offline [--json]` | Plan a run, write the review artifact, stop at approval. No CRM write, no LLM. |
+| `gtm-lab demo --crm hubspot` | Same, reconciled against a real HubSpot portal (reads only). Only on explicit request. |
 | `gtm-lab runs [--json]` | List runs, newest first. |
 | `gtm-lab inspect <run-id>` | All persisted state of a run as JSON: `summary`, accounts, decisions, matches, costs, plan, write results, audit events. |
 | `gtm-lab eval <run-id> [--json]` | Four integrity checks. Exit code 1 on failure. |
 | `gtm-lab approve <run-id>` | `proposed` → `approved`. Writes nothing. |
 | `gtm-lab reject <run-id> [--reason ...]` | `proposed` → `rejected`. |
-| `gtm-lab sync <run-id> [--json]` | Write an approved plan to the local mock CRM. Re-running is a no-op. |
+| `gtm-lab sync <run-id> [--json]` | Write an approved plan to the CRM it was planned against (mock or HubSpot). Re-running is a no-op. |
 
 Read `--json` output or `inspect` instead of parsing the terminal tables.
 
@@ -36,6 +37,7 @@ Read `--json` output or `inspect` instead of parsing the terminal tables.
 - Approve and sync are separate steps: never run both from one request.
 - Before approving, show the user the review artifact's content: approvable entries, policy failures, skipped accounts, uncertain data.
 - Never edit `crm.sqlite`, `runs.sqlite` or `events.jsonl` by hand to fix a run. Use the CLI.
+- A plan with `summary.crm` = `hubspot` writes to a real HubSpot portal on sync. Say so explicitly before asking for confirmation. Never pick `--crm hubspot` unless the user asks for it.
 - Explanations must come from persisted data (`inspect`). Label anything inferred as an assumption.
 
 ## Tests

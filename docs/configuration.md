@@ -75,6 +75,14 @@ A list of rules checked before anything else. Any match → `not_qualified` with
 | `min_evidence_count` | int | `2` (model default: `1`) | Minimum number of evidence facts for `qualified`. Below it the decision is `insufficient_evidence`, and the policy check blocks the entry. |
 | `require_contact_email_for_create` | bool | `false` | If true, a new account is only approvable if at least one proposed contact has an email. |
 
+### `crm`
+
+Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
+
+| Key | Type | Demo value | Effect |
+|---|---|---|---|
+| `hubspot_contact_legal_basis` | string or null | `"Not applicable"` | Sent as `hs_legal_basis` on every HubSpot contact. Required by portals with GDPR enabled. No default: it is a compliance decision. The demo value is truthful only because the fixture contacts are fictional. |
+
 ---
 
 ## 2. CLI options
@@ -85,6 +93,8 @@ A list of rules checked before anything else. Any match → `not_qualified` with
 |---|---|---|---|
 | `demo` | `--offline` / `--agentic` | `--offline` | `--agentic` sends `insufficient_evidence` accounts to Claude. Falls back to offline, and says so, if no Anthropic credentials are found. |
 | `demo` | `--limit` | `50` | Maximum number of accounts requested from the discovery provider. |
+| `demo` | `--crm` | `mock` | CRM the plan is reconciled against: `mock` (local SQLite) or `hubspot` (needs `HUBSPOT_SERVICE_KEY`). `sync` later writes to the CRM recorded on the plan. |
+| `demo`, `runs`, `eval`, `sync` | `--json` | off | Structured output instead of tables. |
 | `demo` | `--max-llm-calls` | `5` | Agentic mode only. Hard cap on LLM calls per run. Past the cap, accounts stay `insufficient_evidence`. |
 | `demo` | `--max-llm-cents` | `50` | Agentic mode only. Cap on estimated LLM spend per run, in cents, computed from the token usage of each response. It is checked before each call, so the call that crosses it still completes; no call starts once it is reached. |
 | `demo`, `approve`, `reject`, `sync` | `--example-dir` | bundled example | Directory containing `config/gtm-context.yaml` and `fixtures/`. Point it at your own copy to use your own context and fixtures. |
@@ -103,6 +113,8 @@ The CLI does **not** read a `.env` file. Export these in your shell, or use your
 | `GTM_LAB_STATE_DIR` | `./.gtm-lab-state` | Default for `--state-dir` on every command. |
 | `ANTHROPIC_API_KEY` | unset | Credential for agentic mode. |
 | `ANTHROPIC_AUTH_TOKEN` | unset | Alternative credential for agentic mode. |
+| `HUBSPOT_SERVICE_KEY` | unset | HubSpot Service Key for `--crm hubspot`. `HUBSPOT_ACCESS_TOKEN` is accepted too. |
+| `GTM_LAB_LIVE_HUBSPOT` | unset | Set to `1` to run the live HubSpot test (`pytest -m live_hubspot`). |
 
 Agentic mode also accepts an `ant auth login` profile (`~/.config/anthropic/`). If none of the three is present, `--agentic` runs offline and says so.
 
@@ -115,6 +127,8 @@ These are not exposed as config yet. Changing them means editing the code.
 | Value | Where | Current | Effect |
 |---|---|---|---|
 | Enrichment cost per call | `providers/fixture_enrichment.py`, `cost_cents_per_call` | `10` cents | Synthetic price of the fixture provider. A real provider adapter sets its own. |
+| HubSpot API version | `crm/hubspot.py`, `API_VERSION` | `2026-09` | Dated HubSpot API version used for every call. |
+| HubSpot idempotency property | `crm/hubspot.py`, `REF_PROPERTY` | `gtm_lab_external_ref` | Unique custom property created on companies and contacts. |
 | Sync retries | `workflows/account_discovery.py`, `sync(max_retries=2)` | `2` | Retries per CRM write on a retriable error, so 3 attempts in total. Immediate, no backoff. |
 | Base confidence for `qualified` | `agents/qualifier.py` | `0.7` | Starting confidence when all ICP checks pass. |
 | Fresh-signal bonus | `agents/qualifier.py` | `+0.1` | Added when at least one relevant signal is in the window. |
@@ -136,5 +150,5 @@ Used by the offline demo. Copy them next to your own `gtm-context.yaml` and poin
 | File | What you can set |
 |---|---|
 | `fixtures/discovery.yaml` | `accounts` (id, domain, name, employees, `employees_confidence`, industry, `hq_country`, `hq_state`, `fields_missing`, `signals` with kind, description, `event_date`, confidence, source) and `source_failures` (provider errors to report). |
-| `fixtures/enrichment.yaml` | `by_domain`: for each domain, the contacts returned per persona name (`first_name`, `last_name`, `title`, `email`, `verified`). `fails_for_domains`: domains for which the provider reports a failure. Use `example.invalid` emails, never real ones. |
+| `fixtures/enrichment.yaml` | `by_domain`: for each domain, the contacts returned per persona name (`first_name`, `last_name`, `title`, `email`, `verified`). `fails_for_domains`: domains for which the provider reports a failure. Use `example.com` emails (RFC 2606), never real ones. HubSpot rejects `.invalid`. |
 | `fixtures/crm-seed.yaml` | Accounts loaded into the mock CRM whenever it is empty. In the demo, one account is seeded so the "already in CRM" scenario happens. |

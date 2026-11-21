@@ -4,7 +4,7 @@ For each (domain, persona) pair the fixture declares what the provider would ret
 If a pair is not present, the provider returns an empty result for it - exactly the
 behaviour a real provider has when it doesn't know anybody matching the query.
 
-Emails in the fixture are synthetic (example.invalid / masked) - see tests.
+Emails in the fixture are synthetic, on example.com (RFC 2606).
 """
 
 from __future__ import annotations

@@ -320,6 +320,7 @@ class AccountDiscoveryWorkflow:
             entries=entries,
             enrichment_budget_cents=budget.cap_cents,
             enrichment_spent_cents=budget.spent_cents,
+            crm_target=self.crm.name,
         )
         self.store.save_plan(plan)
         self.recorder.record(
@@ -377,6 +378,11 @@ class AccountDiscoveryWorkflow:
             WritePlanStatus.FAILED,
         }:
             raise ValueError(f"Cannot sync plan in status {plan.status}")
+        if plan.crm_target != self.crm.name:
+            raise ValueError(
+                f"Plan {run_id} was reconciled against the '{plan.crm_target}' CRM; "
+                f"refusing to sync it to '{self.crm.name}'. Re-plan against '{self.crm.name}'."
+            )
 
         accounts = {a.account_id: a for a in self.store.load_accounts(run_id)}
         results: list[WriteOperationResult] = []
@@ -435,7 +441,19 @@ class AccountDiscoveryWorkflow:
     ) -> tuple[WriteOperationResult, str | None]:
         external_ref = f"gtm-lab:{run_id}:{acc.account_id}"
 
-        mine = self.crm.find_account_by_external_ref(external_ref)
+        try:
+            mine = self.crm.find_account_by_external_ref(external_ref)
+            others = [] if mine else self.crm.find_accounts_by_domain(acc.domain)
+        except CRMError as e:
+            return (
+                WriteOperationResult(
+                    account_id=acc.account_id,
+                    operation="create_account",
+                    outcome="failed",
+                    error=f"Could not revalidate against the CRM: {e}",
+                ),
+                None,
+            )
         if mine is not None:
             return (
                 WriteOperationResult(
@@ -444,7 +462,6 @@ class AccountDiscoveryWorkflow:
                 mine.crm_account_id,
             )
 
-        others = self.crm.find_accounts_by_domain(acc.domain)
         if others:
             return (
                 WriteOperationResult(
@@ -498,7 +515,16 @@ class AccountDiscoveryWorkflow:
             f"gtm-lab:{run_id}:contact:{contact.account_id}:{contact.persona}:"
             f"{contact.first_name}:{contact.last_name}"
         )
-        if self.crm.find_contact_by_external_ref(external_ref) is not None:
+        try:
+            already = self.crm.find_contact_by_external_ref(external_ref)
+        except CRMError as e:
+            return WriteOperationResult(
+                account_id=contact.account_id,
+                operation="create_contact",
+                outcome="failed",
+                error=f"Could not revalidate against the CRM: {e}",
+            )
+        if already is not None:
             return WriteOperationResult(
                 account_id=contact.account_id, operation="create_contact", outcome="idempotent_noop"
             )

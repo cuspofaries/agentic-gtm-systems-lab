@@ -68,6 +68,17 @@ class Policy(BaseModel):
     require_contact_email_for_create: bool = False
 
 
+class CRMSettings(BaseModel):
+    """Settings used only when writing to a real CRM."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # HubSpot portals with GDPR features enabled require a legal basis on every contact.
+    # It is a compliance decision, so there is no default: set the exact HubSpot value
+    # (for example "Not applicable" for synthetic test data). None = not sent.
+    hubspot_contact_legal_basis: str | None = None
+
+
 class GTMContext(BaseModel):
     """The full GTM context, versioned and loadable in one call."""
 
@@ -80,3 +91,4 @@ class GTMContext(BaseModel):
     signal_policy: SignalPolicy
     exclusions: list[ExclusionRule]
     policy: Policy
+    crm: CRMSettings = Field(default_factory=CRMSettings)

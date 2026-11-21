@@ -29,7 +29,7 @@ def test_create_contact_requires_valid_parent(tmp_path: Path):
         first_name="A",
         last_name="B",
         title="VP Sales",
-        email="a@example.invalid",
+        email="a@example.com",
         source=SourceAttribution(provider="test"),
     )
     with pytest.raises(CRMError):

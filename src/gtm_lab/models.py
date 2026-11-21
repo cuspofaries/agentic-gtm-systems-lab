@@ -177,6 +177,9 @@ class WritePlan(BaseModel):
     entries: list[WritePlanEntry] = Field(default_factory=list)
     enrichment_budget_cents: int
     enrichment_spent_cents: int = 0
+    # Which CRM the plan was reconciled against. Plans saved before this field existed
+    # load as "mock", which is the only CRM they could have used.
+    crm_target: str = "mock"
 
     @property
     def approvable_entries(self) -> list[WritePlanEntry]:

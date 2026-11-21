@@ -21,13 +21,15 @@ from rich.table import Table
 
 from .agents.qualifier import DeterministicQualifier, LLMQualifier
 from .context import load_context
+from .crm.base import CRMError
+from .crm.hubspot import HubSpotCRM
 from .crm.mock import MockCRM
 from .evaluations import evaluate_run
 from .observability.events import EventRecorder
 from .persistence.store import RunStore
 from .providers import FixtureDiscoveryProvider, FixtureEnrichmentProvider
 from .review import render_review
-from .summary import run_detail, run_summary
+from .summary import CRM_LABELS, run_detail, run_summary
 from .workflows import AccountDiscoveryWorkflow
 
 app = typer.Typer(add_completion=False, help="Agentic GTM systems lab.")
@@ -39,24 +41,33 @@ DEFAULT_STATE_DIR = Path(os.environ.get("GTM_LAB_STATE_DIR", "./.gtm-lab-state")
 DEFAULT_EXAMPLE = Path(__file__).resolve().parent.parent.parent / "examples" / "account-discovery-to-crm"
 
 
+HUBSPOT_TOKEN_VARS = ("HUBSPOT_SERVICE_KEY", "HUBSPOT_ACCESS_TOKEN")
+
+
+def _make_crm(crm: str, ctx, state_dir: Path):
+    if crm == "mock":
+        return MockCRM(state_dir / "crm.sqlite")
+    if crm == "hubspot":
+        token = next((os.environ[v] for v in HUBSPOT_TOKEN_VARS if os.environ.get(v)), None)
+        if not token:
+            _fail("HubSpot selected but no token found.",
+                  f"Export {HUBSPOT_TOKEN_VARS[0]} (a HubSpot Service Key). See docs/hubspot.md.")
+        return HubSpotCRM(token, contact_legal_basis=ctx.crm.hubspot_contact_legal_basis)
+    _fail(f"Unknown CRM '{crm}'. Use 'mock' or 'hubspot'.")
+
+
 def _build_workflow(
-    example_dir: Path, state_dir: Path, fallback_qualifier=None
+    example_dir: Path, state_dir: Path, fallback_qualifier=None, crm: str = "mock"
 ) -> AccountDiscoveryWorkflow:
     state_dir.mkdir(parents=True, exist_ok=True)
     ctx = load_context(example_dir / "config" / "gtm-context.yaml")
-    disc = FixtureDiscoveryProvider(example_dir / "fixtures" / "discovery.yaml")
-    enrich = FixtureEnrichmentProvider(example_dir / "fixtures" / "enrichment.yaml")
-    crm = MockCRM(state_dir / "crm.sqlite")
-    store = RunStore(state_dir / "runs.sqlite")
-    recorder = EventRecorder(state_dir / "events.jsonl")
-    _seed_crm_if_empty(crm, example_dir / "fixtures" / "crm-seed.yaml")
     return AccountDiscoveryWorkflow(
         context=ctx,
-        discovery=disc,
-        enrichment=enrich,
-        crm=crm,
-        store=store,
-        recorder=recorder,
+        discovery=FixtureDiscoveryProvider(example_dir / "fixtures" / "discovery.yaml"),
+        enrichment=FixtureEnrichmentProvider(example_dir / "fixtures" / "enrichment.yaml"),
+        crm=_make_crm(crm, ctx, state_dir),
+        store=RunStore(state_dir / "runs.sqlite"),
+        recorder=EventRecorder(state_dir / "events.jsonl"),
         qualifier=DeterministicQualifier(),
         fallback_qualifier=fallback_qualifier,
     )
@@ -94,6 +105,7 @@ def demo(
     max_llm_calls: int = typer.Option(5, "--max-llm-calls", help="Hard cap on LLM calls (agentic mode)."),
     max_llm_cents: int = typer.Option(50, "--max-llm-cents", help="Hard cap on LLM spend in cents."),
     as_json: bool = typer.Option(False, "--json", help="Print a structured run summary as JSON."),
+    crm: str = typer.Option("mock", "--crm", help="CRM to reconcile against: mock (default) or hubspot."),
 ):
     """Run the demo end to end. Stops at the human approval gate - no CRM writes."""
     out = err_console if as_json else console
@@ -117,8 +129,15 @@ def demo(
             out.print(f"[yellow]Agentic mode unavailable ({type(exc).__name__}: {exc}). "
                       "Running the deterministic offline mode instead; no LLM was called.[/yellow]")
 
-    wf = _build_workflow(example_dir, state_dir, fallback_qualifier=fallback)
-    plan = wf.plan(limit=limit)
+    wf = _build_workflow(example_dir, state_dir, fallback_qualifier=fallback, crm=crm)
+    if crm == "mock":
+        _seed_crm_if_empty(wf.crm, example_dir / "fixtures" / "crm-seed.yaml")
+    else:
+        out.print(f"[cyan]CRM:[/cyan] reconciling against {CRM_LABELS[crm]} (read-only until sync).")
+    try:
+        plan = wf.plan(limit=limit)
+    except CRMError as e:
+        _fail(f"CRM error while planning against {CRM_LABELS[crm]}: {e}")
     review_path = state_dir / f"review_{plan.run_id}.md"
     review_path.write_text(render_review(plan, wf.store))
 
@@ -277,25 +296,29 @@ def sync(
     state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir"),
     as_json: bool = typer.Option(False, "--json", help="Print every write result as JSON."),
 ):
-    """Apply an approved plan to the local mock CRM. Idempotent: re-running does not duplicate."""
-    before = _require_plan(run_id, state_dir).status.value
+    """Apply an approved plan to the CRM it was planned against. Idempotent."""
+    plan_before = _require_plan(run_id, state_dir)
+    before = plan_before.status.value
+    target = plan_before.crm_target
     if before in {"proposed", "draft"}:
         _fail(f"Run {run_id} is '{before}': it must be approved before it can be synced.",
               f"Review it, then `gtm-lab approve {run_id}`.")
     if before == "rejected":
         _fail(f"Run {run_id} was rejected; it cannot be synced.")
-    wf = _build_workflow(example_dir, state_dir)
+    wf = _build_workflow(example_dir, state_dir, crm=target)
     results = wf.sync(run_id)
     after = wf.store.load_plan(run_id).status.value
     counts = {k: sum(1 for r in results if r.outcome == k)
               for k in ("ok", "idempotent_noop", "failed", "stale_plan")}
     if as_json:
-        _emit_json({"run_id": run_id, "crm_target": "local mock CRM (SQLite)",
-                    "crm_db": str(state_dir / "crm.sqlite"), "status_before": before,
+        _emit_json({"run_id": run_id, "crm_target": CRM_LABELS.get(target, target),
+                    "crm_db": str(state_dir / "crm.sqlite") if target == "mock" else None,
+                    "status_before": before,
                     "status_after": after, "counts": counts,
                     "results": [json.loads(r.model_dump_json()) for r in results]})
         return
-    console.print(f"Target: local mock CRM ({state_dir / 'crm.sqlite'}). Plan: {before} → {after}.")
+    where = f" ({state_dir / 'crm.sqlite'})" if target == "mock" else ""
+    console.print(f"Target: {CRM_LABELS.get(target, target)}{where}. Plan: {before} → {after}.")
     console.print(f"Sync complete: {counts['ok']} ok · {counts['failed']} failed · "
                   f"{counts['idempotent_noop']} noop · {counts['stale_plan']} stale")
     console.print_json(data=[json.loads(r.model_dump_json()) for r in results[:20]], default=str)

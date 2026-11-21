@@ -1,5 +1,6 @@
 # Synthetic enrichment fixture.
-# Emails are intentionally on `example.invalid` (RFC 6761) - never deliverable.
+# Emails use example.com (reserved by RFC 2606 for documentation, never delivered).
+# Not .invalid: HubSpot rejects that TLD as an invalid email.
 
 fails_for_domains: []
 
@@ -9,13 +10,13 @@ by_domain:
       - first_name: Riley
         last_name: Hall
         title: VP Sales
-        email: riley.hall@example.invalid
+        email: riley.hall@example.com
         verified: true
     "Revenue Operations":
       - first_name: Sam
         last_name: Ortiz
         title: RevOps Lead
-        email: sam.ortiz@example.invalid
+        email: sam.ortiz@example.com
         verified: true
 
   nimbus.saas.example:
@@ -23,7 +24,7 @@ by_domain:
       - first_name: Alex
         last_name: Rowe
         title: Head of Sales
-        email: alex.rowe@example.invalid
+        email: alex.rowe@example.com
         verified: false
 
   silentwave.saas.example:
@@ -31,7 +32,7 @@ by_domain:
       - first_name: Jamie
         last_name: Park
         title: VP Sales
-        email: jamie.park@example.invalid
+        email: jamie.park@example.com
         verified: true
 
   incomplete.saas.example:
@@ -48,7 +49,7 @@ by_domain:
       - first_name: Lee
         last_name: Monroe
         title: VP Sales
-        email: lee.monroe@example.invalid
+        email: lee.monroe@example.com
         verified: true
 
   failwrite.saas.example:
@@ -56,5 +57,5 @@ by_domain:
       - first_name: Toni
         last_name: Barnes
         title: VP Sales
-        email: toni.barnes@example.invalid
+        email: toni.barnes@example.com
         verified: true

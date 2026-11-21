@@ -92,11 +92,11 @@ Recipes in `docs/integration-guide.md`.
 
 ## 7. Integration limitations
 
-- **No live data-provider or CRM adapter ships.** Clay, Apollo, HubSpot and Salesforce adapters are next steps.
+- **No live data-provider adapter ships.** A HubSpot CRM adapter was added after V1 (`docs/hubspot.md`); Clay, Apollo and Salesforce remain next steps.
 - **The agentic path has not run against the live API.** It is unit-tested with a fake client. There is no labeled benchmark, so the LLM-vs-baseline comparison reports agreement, not accuracy.
 - **Single-writer SQLite.** Concurrent runs on the same state directory are not supported.
 - **No scheduler.** The CLI is one-shot; wrap it in cron, systemd or an orchestrator if needed.
-- **Synthetic contacts only.** Fixture emails use `example.invalid` (RFC 6761).
+- **Synthetic contacts only.** Fixture emails use `example.com` (reserved by RFC 2606).
 - **Examples are not packaged.** `gtm-lab demo` expects a source checkout (`pip install -e .`).
 
 ## 8. Security considerations
@@ -117,7 +117,7 @@ Recipes in `docs/integration-guide.md`.
 
 ## 10. Recommended next improvements
 
-1. A HubSpot `CRMAdapter` that maps `external_ref` to a custom property and implements the same revalidation.
+1. ~~A HubSpot `CRMAdapter`~~: done after V1, see `docs/hubspot.md`.
 2. A real `DiscoveryProvider` for one public source.
 3. A small labeled benchmark (20 to 30 ambiguous accounts with agreed answers) to measure the LLM step instead of only logging agreement.
 4. Quarantine table for provider failures.

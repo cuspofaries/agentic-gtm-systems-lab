@@ -8,7 +8,7 @@ The surest sign a change is worth merging is that it stops something going wrong
 
 ## 2. Add a provider adapter
 
-Clay / Apollo / Crustdata / HubSpot / Salesforce - pick one. See `docs/integration-guide.md`. Add your adapter under `src/gtm_lab/providers/` (or `src/gtm_lab/crm/`), ship a fixture-based test, and don't ship live credentials. Mark it as **Implemented but not integration-tested** in the README capabilities table until a real user confirms it against their account.
+Clay / Apollo / Crustdata / Salesforce - pick one (HubSpot exists: `src/gtm_lab/crm/hubspot.py`, use it as the template). See `docs/integration-guide.md`. Add your adapter under `src/gtm_lab/providers/` (or `src/gtm_lab/crm/`), ship a fixture-based test, and don't ship live credentials. Mark it as **Implemented but not integration-tested** in the README capabilities table until a real user confirms it against their account.
 
 ## 3. Add a policy check
 

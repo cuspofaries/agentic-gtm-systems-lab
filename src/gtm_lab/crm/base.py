@@ -22,6 +22,8 @@ class CRMError(Exception):
 
 
 class CRMAdapter(ABC):
+    name: str = "crm"  # recorded on each plan; sync refuses a plan built against another CRM
+
     @abstractmethod
     def find_accounts_by_domain(self, domain: str) -> list[CRMAccount]: ...
 

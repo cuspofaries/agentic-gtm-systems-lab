@@ -20,6 +20,8 @@ from .base import CRMAdapter, CRMError
 
 
 class MockCRM(CRMAdapter):
+    name = "mock"
+
     SCHEMA = """
     CREATE TABLE IF NOT EXISTS crm_account (
         crm_account_id TEXT PRIMARY KEY,
