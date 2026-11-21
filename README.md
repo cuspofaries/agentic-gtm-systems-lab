@@ -8,6 +8,10 @@ An executable reference architecture for modern GTM engineering - from company c
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 
+![Terminal recording: gtm-lab demo proposes a plan, approve, sync writes 12 records, a second sync writes nothing, eval passes its 4 checks](docs/assets/demo.gif)
+
+*The offline demo end to end: plan, approval, sync, a second sync that is a no-op, and the integrity checks. Real command output; only the typing is simulated.*
+
 ---
 
 ## What business problem does this solve?
