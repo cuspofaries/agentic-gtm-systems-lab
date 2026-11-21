@@ -85,6 +85,16 @@ class RunStore:
                 [(run_id, m.account_id, m.model_dump_json()) for m in matches],
             )
 
+    def load_matches(self, run_id: str) -> list[ReconciliationMatch]:
+        with self._conn() as c:
+            rows = c.execute("SELECT json FROM match WHERE run_id = ?", (run_id,)).fetchall()
+        return [ReconciliationMatch.model_validate_json(r[0]) for r in rows]
+
+    def load_costs(self, run_id: str) -> list[EnrichmentCost]:
+        with self._conn() as c:
+            rows = c.execute("SELECT json FROM cost WHERE run_id = ?", (run_id,)).fetchall()
+        return [EnrichmentCost.model_validate_json(r[0]) for r in rows]
+
     def save_costs(self, run_id: str, costs: list[EnrichmentCost]) -> None:
         with self._conn() as c:
             c.executemany(

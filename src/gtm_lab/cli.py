@@ -1,6 +1,6 @@
-"""Typer CLI entry point. 6 commands.
+"""Typer CLI entry point.
 
-- demo     - run an end-to-end offline demo end to end, stops before CRM writes
+- demo     - run the workflow end to end, stop at the approval gate (no CRM writes)
 - eval     - run evaluation checks on a run id
 - runs     - list runs
 - inspect  - print a JSON dump of a run's state
@@ -27,10 +27,12 @@ from .observability.events import EventRecorder
 from .persistence.store import RunStore
 from .providers import FixtureDiscoveryProvider, FixtureEnrichmentProvider
 from .review import render_review
+from .summary import run_detail, run_summary
 from .workflows import AccountDiscoveryWorkflow
 
 app = typer.Typer(add_completion=False, help="Agentic GTM systems lab.")
 console = Console()
+err_console = Console(stderr=True)
 
 
 DEFAULT_STATE_DIR = Path(os.environ.get("GTM_LAB_STATE_DIR", "./.gtm-lab-state"))
@@ -91,14 +93,16 @@ def demo(
     limit: int = typer.Option(50, "--limit", help="Max accounts requested from the discovery provider."),
     max_llm_calls: int = typer.Option(5, "--max-llm-calls", help="Hard cap on LLM calls (agentic mode)."),
     max_llm_cents: int = typer.Option(50, "--max-llm-cents", help="Hard cap on LLM spend in cents."),
+    as_json: bool = typer.Option(False, "--json", help="Print a structured run summary as JSON."),
 ):
     """Run the demo end to end. Stops at the human approval gate - no CRM writes."""
+    out = err_console if as_json else console
     provider = None
     fallback = None
     if not offline and not _anthropic_credentials_available():
-        console.print("[yellow]--agentic requested but no Anthropic credentials found "
-                      "(ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or an `ant auth login` profile). "
-                      "Running the deterministic offline mode instead; no LLM was called.[/yellow]")
+        out.print("[yellow]--agentic requested but no Anthropic credentials found "
+                  "(ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or an `ant auth login` profile). "
+                  "Running the deterministic offline mode instead; no LLM was called.[/yellow]")
         offline = True
     if not offline:
         try:
@@ -106,18 +110,26 @@ def demo(
 
             provider = AnthropicProviderCall(max_calls=max_llm_calls, max_spend_cents=max_llm_cents)
             fallback = LLMQualifier(provider_call=provider)
-            console.print(f"[cyan]Agentic mode:[/cyan] {provider.model} decides only the accounts "
-                          f"the rules return as insufficient_evidence "
-                          f"(cap {max_llm_calls} calls / {max_llm_cents}¢).")
+            out.print(f"[cyan]Agentic mode:[/cyan] {provider.model} decides only the accounts "
+                      f"the rules return as insufficient_evidence "
+                      f"(cap {max_llm_calls} calls / {max_llm_cents}¢).")
         except Exception as exc:  # missing package or credentials
-            console.print(f"[yellow]Agentic mode unavailable ({type(exc).__name__}: {exc}). "
-                          "Running the deterministic offline mode instead; no LLM was called.[/yellow]")
+            out.print(f"[yellow]Agentic mode unavailable ({type(exc).__name__}: {exc}). "
+                      "Running the deterministic offline mode instead; no LLM was called.[/yellow]")
 
     wf = _build_workflow(example_dir, state_dir, fallback_qualifier=fallback)
     plan = wf.plan(limit=limit)
-    review_md = render_review(plan, wf.store)
     review_path = state_dir / f"review_{plan.run_id}.md"
-    review_path.write_text(review_md)
+    review_path.write_text(render_review(plan, wf.store))
+
+    if as_json:
+        summary = run_summary(plan.run_id, state_dir)
+        if provider is not None:
+            summary["llm"] = {"calls": provider.calls, "estimated_spend_cents": provider.spent_cents,
+                              "errors": provider.errors}
+        _emit_json(summary)
+        return
+
     console.print(f"[green]Plan proposed:[/green] run_id=[bold]{plan.run_id}[/bold]")
     console.print(f"Review artifact → {review_path}")
     console.print("Next: `gtm-lab approve " + plan.run_id + "` or `gtm-lab reject " + plan.run_id + "`")
@@ -151,14 +163,38 @@ def demo(
                       + (f" · errors: {provider.errors}" if provider.errors else ""))
 
 
+def _emit_json(data) -> None:
+    typer.echo(json.dumps(data, indent=2, default=str))
+
+
+def _fail(message: str, hint: str = "") -> None:
+    err_console.print(f"[red]Error:[/red] {message}")
+    if hint:
+        err_console.print(hint)
+    raise typer.Exit(code=1)
+
+
+def _require_plan(run_id: str, state_dir: Path):
+    plan = RunStore(state_dir / "runs.sqlite").load_plan(run_id)
+    if plan is None:
+        _fail(f"No run '{run_id}' in {state_dir}.", "List runs with `gtm-lab runs`.")
+    return plan
+
+
 @app.command("eval")
 def eval_cmd(
     run_id: str = typer.Argument(..., help="Run id to evaluate."),
     state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir"),
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
 ):
-    """Run evaluation checks against a completed run."""
+    """Run the four integrity checks against a run. Exit code 1 if any check fails."""
+    _require_plan(run_id, state_dir)
     store = RunStore(state_dir / "runs.sqlite")
     report = evaluate_run(run_id, store)
+    if as_json:
+        _emit_json({"run_id": run_id, "ok": report.ok, "checks_passed": report.checks_passed,
+                    "failures": report.failures, "metrics": report.metrics})
+        raise typer.Exit(code=0 if report.ok else 1)
     console.print(f"[bold]Evaluation of run[/bold] {run_id}")
     console.print(f"Status: [{'green' if report.ok else 'red'}]{'OK' if report.ok else 'FAIL'}[/]")
     for p in report.checks_passed:
@@ -172,10 +208,22 @@ def eval_cmd(
 
 
 @app.command()
-def runs(state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir")):
-    """List known runs."""
+def runs(
+    state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir"),
+    as_json: bool = typer.Option(False, "--json", help="Print run ids with status as JSON."),
+):
+    """List known runs, newest first."""
     store = RunStore(state_dir / "runs.sqlite")
-    for rid in store.list_runs():
+    ids = store.list_runs()
+    if as_json:
+        out = []
+        for rid in ids:
+            plan = store.load_plan(rid)
+            out.append({"run_id": rid, "plan_status": plan.status.value,
+                        "created_at": plan.created_at, "entries": len(plan.entries)})
+        _emit_json(out)
+        return
+    for rid in ids:
         console.print(rid)
 
 
@@ -184,10 +232,11 @@ def inspect(
     run_id: str = typer.Argument(...),
     state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir"),
 ):
-    """Print a run's state as JSON."""
-    store = RunStore(state_dir / "runs.sqlite")
-    data = store.inspect(run_id)
-    console.print_json(data=data, default=str)
+    """Print everything persisted for a run as JSON: summary, records, audit events."""
+    data = run_detail(run_id, state_dir)
+    if data is None:
+        _fail(f"No run '{run_id}' in {state_dir}.", "List runs with `gtm-lab runs`.")
+    _emit_json(data)
 
 
 @app.command()
@@ -196,10 +245,14 @@ def approve(
     example_dir: Path = typer.Option(DEFAULT_EXAMPLE, "--example-dir"),
     state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir"),
 ):
-    """Mark a proposed plan as approved. Does not sync."""
-    wf = _build_workflow(example_dir, state_dir)
-    plan = wf.approve(run_id)
-    console.print(f"[green]Approved[/green] {run_id} ({len(plan.approvable_entries)} entries to sync)")
+    """Mark a proposed plan as approved. Writes nothing to the CRM."""
+    before = _require_plan(run_id, state_dir).status.value
+    if before != "proposed":
+        _fail(f"Run {run_id} is '{before}'; only a 'proposed' plan can be approved.")
+    plan = _build_workflow(example_dir, state_dir).approve(run_id)
+    console.print(f"[green]Approved[/green] {run_id}: proposed → approved. "
+                  f"{len(plan.approvable_entries)} entries will be written by `gtm-lab sync {run_id}`. "
+                  "Nothing has been written to the CRM yet.")
 
 
 @app.command()
@@ -209,10 +262,12 @@ def reject(
     example_dir: Path = typer.Option(DEFAULT_EXAMPLE, "--example-dir"),
     state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir"),
 ):
-    """Mark a proposed plan as rejected."""
-    wf = _build_workflow(example_dir, state_dir)
-    wf.reject(run_id, reason=reason)
-    console.print(f"[yellow]Rejected[/yellow] {run_id}")
+    """Mark a proposed plan as rejected. Nothing will be written for this run."""
+    before = _require_plan(run_id, state_dir).status.value
+    if before != "proposed":
+        _fail(f"Run {run_id} is '{before}'; only a 'proposed' plan can be rejected.")
+    _build_workflow(example_dir, state_dir).reject(run_id, reason=reason)
+    console.print(f"[yellow]Rejected[/yellow] {run_id}: proposed → rejected.")
 
 
 @app.command()
@@ -220,14 +275,29 @@ def sync(
     run_id: str = typer.Argument(...),
     example_dir: Path = typer.Option(DEFAULT_EXAMPLE, "--example-dir"),
     state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir"),
+    as_json: bool = typer.Option(False, "--json", help="Print every write result as JSON."),
 ):
-    """Apply an approved plan to the mock CRM. Idempotent: re-running does not duplicate."""
+    """Apply an approved plan to the local mock CRM. Idempotent: re-running does not duplicate."""
+    before = _require_plan(run_id, state_dir).status.value
+    if before in {"proposed", "draft"}:
+        _fail(f"Run {run_id} is '{before}': it must be approved before it can be synced.",
+              f"Review it, then `gtm-lab approve {run_id}`.")
+    if before == "rejected":
+        _fail(f"Run {run_id} was rejected; it cannot be synced.")
     wf = _build_workflow(example_dir, state_dir)
     results = wf.sync(run_id)
-    oks = sum(1 for r in results if r.outcome == "ok")
-    fails = sum(1 for r in results if r.outcome == "failed")
-    noops = sum(1 for r in results if r.outcome == "idempotent_noop")
-    console.print(f"Sync complete: {oks} ok · {fails} failed · {noops} noop")
+    after = wf.store.load_plan(run_id).status.value
+    counts = {k: sum(1 for r in results if r.outcome == k)
+              for k in ("ok", "idempotent_noop", "failed", "stale_plan")}
+    if as_json:
+        _emit_json({"run_id": run_id, "crm_target": "local mock CRM (SQLite)",
+                    "crm_db": str(state_dir / "crm.sqlite"), "status_before": before,
+                    "status_after": after, "counts": counts,
+                    "results": [json.loads(r.model_dump_json()) for r in results]})
+        return
+    console.print(f"Target: local mock CRM ({state_dir / 'crm.sqlite'}). Plan: {before} → {after}.")
+    console.print(f"Sync complete: {counts['ok']} ok · {counts['failed']} failed · "
+                  f"{counts['idempotent_noop']} noop · {counts['stale_plan']} stale")
     console.print_json(data=[json.loads(r.model_dump_json()) for r in results[:20]], default=str)
 
 

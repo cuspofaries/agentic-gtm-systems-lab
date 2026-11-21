@@ -144,7 +144,11 @@ class AccountDiscoveryWorkflow:
 
     def plan(self, *, limit: int = 50, run_id: str | None = None) -> WritePlan:
         run_id = run_id or f"run_{ts_slug()}"
-        self.recorder.record(run_id, "workflow.start", {"limit": limit})
+        self.recorder.record(
+            run_id,
+            "workflow.start",
+            {"limit": limit, "llm_fallback_configured": self.fallback_qualifier is not None},
+        )
 
         # 2. Discovery
         disc = self.discovery.discover(limit=limit)
