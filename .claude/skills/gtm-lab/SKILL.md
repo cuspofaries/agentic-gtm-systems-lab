@@ -6,6 +6,7 @@ disable-model-invocation: true
 allowed-tools:
   - Read
   - Bash(command -v gtm-lab)
+  - Bash(ls .venv/bin/gtm-lab)
   - Bash(gtm-lab demo --offline --json)
   - Bash(.venv/bin/gtm-lab demo --offline --json)
   - Bash(gtm-lab runs --json)
@@ -24,9 +25,11 @@ Requested operation: `$ARGUMENTS` (empty means: introduce the lab).
 
 ## Before any command
 
-1. Find the CLI: `command -v gtm-lab`. If it is missing, use `.venv/bin/gtm-lab` if that file exists.
+1. Find the CLI. Prefer this repository's `.venv/bin/gtm-lab` if it exists (a `gtm-lab` on PATH may belong to another checkout); otherwise use `gtm-lab` from `command -v gtm-lab`.
 2. If neither exists, tell the user and propose: `python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"`. Run it only after they agree.
 3. Use `--json` output and `inspect` JSON. Do not parse the terminal tables.
+4. Run each CLI command exactly as written, from the repository root, on its own: no `cd`, no `&&` or `;`, no pipe, no redirection to a file. The permission rules match the bare command; anything else is refused. Read the JSON from the command output.
+5. Report what the data shows. Do not predict outcomes from account names or guess at causes the data does not show.
 
 ## Operations
 
@@ -75,14 +78,14 @@ State the evidence for each finding. Never modify state to fix it.
 
 1. Run `gtm-lab inspect <run-id>`. If `summary.plan_status` is not `proposed`, explain and stop.
 2. Read the review artifact (`summary.paths.review_artifact`) and summarize: entries that will be written, their contacts, policy failures, skipped accounts, and uncertainties (unverified contacts, missing emails, LLM decisions).
-3. Ask the user to confirm this specific run id. Run `gtm-lab approve <run-id>` (or `reject <run-id> --reason "..."`) only after a clear yes.
-4. Stop. Approving does not sync.
+3. Ask the user to confirm this specific run id. Run `gtm-lab approve <run-id>` (or `reject <run-id> --reason "..."`) only after a clear yes. If the user's request already contains an explicit confirmation for this run and this operation, it counts: run the command after step 2.
+4. Stop. Approving does not sync, and a confirmation to approve is not a confirmation to sync.
 
 ### sync <run-id>
 
 1. Run `gtm-lab inspect <run-id>`. Sync requires `approved` (or `partial`/`failed` for a retry). If the plan is `proposed`, say it must be approved first.
 2. Say what will happen: writes to the **local mock CRM** (`summary.paths.crm_db`), not a real CRM; already-written records are skipped.
-3. Ask for confirmation, then run `gtm-lab sync <run-id> --json` and report `counts` and `status_after`.
+3. Ask for confirmation, then run `gtm-lab sync <run-id> --json` and report `counts` and `status_after`. A confirmation counts only if it was given for syncing this run while its status allowed it. Never carry over a confirmation given before approval.
 
 ## LLM mode
 

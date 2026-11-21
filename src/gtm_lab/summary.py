@@ -87,7 +87,14 @@ def run_summary(run_id: str, state_dir: Path) -> dict | None:
             for e in plan.entries
         ],
         "not_in_plan": [
-            {"account_id": d.account_id, "decision": d.decision, "decided_by": d.decided_by}
+            {
+                "account_id": d.account_id,
+                "name": accounts[d.account_id].name if d.account_id in accounts else None,
+                "decision": d.decision,
+                "decided_by": d.decided_by,
+                "explanation": d.explanation,
+                "missing": d.missing,
+            }
             for d in decisions
             if d.account_id not in in_plan
         ],

@@ -2,6 +2,8 @@
 
 *2026-11-21 · cuspofaries*
 
+This report covers V1. The Claude Code integration added afterwards is described in `CLAUDE_CODE_EVOLUTION_REPORT.md`.
+
 ## 1. Executive summary
 
 `pip install -e ".[dev]"` then `gtm-lab demo --offline` runs the full Account Discovery → ICP Qualification → CRM Reconciliation → Enrichment (budget-enforced) → Human Approval → Sync pipeline on a synthetic fixture in a few seconds. Sync revalidates every entry against the current CRM before writing, so a re-run is a reported no-op and a plan whose CRM state changed after approval is not applied blindly.

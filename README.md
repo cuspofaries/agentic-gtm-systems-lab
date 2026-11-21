@@ -31,20 +31,36 @@ The four guardrails this repo exists to demonstrate:
 
 ## What can I run in five minutes?
 
+Two entry points on the same code.
+
+### Option A: Claude Code (guided)
+
 ```bash
-git clone https://github.com/cuspofaries/agentic-gtm-systems-lab
+git clone https://github.com/cuspofaries/agentic-gtm-systems-lab.git
+cd agentic-gtm-systems-lab
+claude
+```
+
+Then type `/gtm-lab`. Claude Code introduces the lab, runs the offline demo, explains each decision from the persisted data, and walks you through approval and sync, asking before every state change. Choose this to learn the workflow or to investigate a run conversationally. See [`docs/claude-code.md`](docs/claude-code.md).
+
+### Option B: Standalone CLI
+
+```bash
+git clone https://github.com/cuspofaries/agentic-gtm-systems-lab.git
 cd agentic-gtm-systems-lab
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-gtm-lab demo --offline        # Full pipeline; stops at the human approval gate
+gtm-lab demo --offline        # Full pipeline; stops at the human approval gate (add --json for structured output)
 gtm-lab runs                  # list the run id it just created
 gtm-lab approve <run-id>      # promote plan to APPROVED
 gtm-lab sync <run-id>         # apply to the mock CRM (run it twice: the second run is all no-ops)
 gtm-lab eval <run-id>         # run 4 integrity checks
 
-pytest -q                     # 47 tests pass
+pytest -q                     # 59 tests pass
 ```
+
+Choose this for scripts, CI, or to reuse the Python components without Claude Code.
 
 ## What happens during the example workflow?
 
@@ -207,15 +223,18 @@ agentic-gtm-systems-lab/
 │   └── fixtures/{discovery,enrichment,crm-seed}.yaml
 ├── tests/
 │   ├── unit/                     ← 31 unit tests
-│   ├── integration/              ← 3 end-to-end tests (incl. no-network check)
+│   ├── integration/              ← 15 tests: end-to-end, no-network, CLI and Claude Code skill checks
 │   └── scenarios/                ← 13 named failure scenarios
 ├── docs/
 │   ├── architecture.md
 │   ├── concepts.md
 │   ├── configuration.md          every setting, its default and what it does
+│   ├── claude-code.md            the /gtm-lab skill: commands, safety, real transcripts
 │   ├── failure-scenarios.md
 │   ├── integration-guide.md
 │   └── adr/                      architectural decision records
+├── .claude/skills/gtm-lab/       ← /gtm-lab Claude Code skill
+├── CLAUDE.md                     ← orientation for Claude Code
 ├── .github/workflows/ci.yml      ← lint + test + offline scenario
 └── pyproject.toml
 ```
@@ -234,6 +253,8 @@ agentic-gtm-systems-lab/
 | State persistence | Implemented and tested |
 | Audit trail | Implemented and tested |
 | 13 failure scenarios | All 13 tested and green |
+| Claude Code skill `/gtm-lab` | Implemented; files checked in CI; invoked for real in Claude Code print mode (not the interactive UI) |
+| Structured CLI output (`--json`, `inspect`) | Implemented and tested |
 | HubSpot / Salesforce adapters | Planned - not implemented |
 | Labeled benchmark for the LLM step | Planned - not implemented |
 

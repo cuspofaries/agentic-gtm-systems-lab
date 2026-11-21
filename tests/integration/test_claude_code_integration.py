@@ -128,6 +128,9 @@ def test_demo_json_is_offline_and_writes_nothing(tmp_path, monkeypatch):
     assert summary["review_artifact_exists"]
     assert Path(summary["paths"]["review_artifact"]).is_file()
     assert summary["writes"] == {"ok": 0, "idempotent_noop": 0, "failed": 0, "stale_plan": 0}
+    undecided = {e["account_id"]: e for e in summary["not_in_plan"]}
+    assert undecided["acc_005"]["missing"] == ["employees unknown"]
+    assert undecided["acc_002"]["decision"] == "not_qualified"
     assert [a.domain for a in MockCRM(tmp_path / "crm.sqlite").all_accounts()] == [
         "axiom.saas.example"  # only the seed
     ]
