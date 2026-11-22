@@ -85,6 +85,10 @@ The subject fix recovered two relevant cases and also let one abstain case throu
 
 Cost per assessed case: 2.1 LLM calls, 5 cents. Latency: one recording, 175 s for 24 cases including the two no-AI assessors; not measured further.
 
+### Follow-up: disconfirmation search and held-out cases
+
+`evidence_backed` now requires a recent-events search (send-back once, else `needs_research`). Ten held-out cases (`evals/opportunity/holdout.yaml`) were labeled before the change and before any model run. Main set after the change: relevant 8/8, false positives 0/9, abstentions 7/7 (64 calls, 154¢ in total). Held out: baseline 3/3 false positives, agent 0/3; relevant found 2/3 for both; abstentions 4/4 for the agent, 0/4 for the baseline (28 calls, 67¢). The agent's held-out miss came from the evidence-term keyword rule (a coaching quote attached to the ramp pain), left unfixed to avoid tuning on held-out data. See `docs/agentic-vs-deterministic.md`.
+
 ## 7. Tests run
 
 - Full suite: 200 passed, 2 skipped (live HubSpot, private real-data case), ruff clean. CI runs the same, with no network and no paid call; the opportunity evaluation replays the committed cassette.
@@ -93,7 +97,8 @@ Cost per assessed case: 2.1 LLM calls, 5 cents. Latency: one recording, 175 s fo
 
 ## 8. Risks, debt, next slice
 
-- No disconfirmation requirement: the agent can call evidence-backed from one page. Next slice: require at least one `recent_events` search before `evidence_backed` (send back otherwise), then re-record and measure on new cases.
+- Disconfirmation is now required (one recent-events search); one search is not exhaustive.
+- The evidence-term keyword rule caused the held-out miss; a better check (terms per offer rather than per pain, or a reviewed list) is the next slice.
 - The evaluation is small, fictional and single-labeled; next: real accounts labeled independently, a held-out split, recorded with the existing real-case harness.
 - Evidence terms are keywords; paraphrased problems are missed.
 - The code's next action is sometimes more eager than the model's own (`consider_persona_enrichment` where the model said `review`): worth reviewing as a policy choice.

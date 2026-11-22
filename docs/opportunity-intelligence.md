@@ -50,10 +50,11 @@ Unknown pain ids are rejected when the context loads.
 |---|---|
 | Which pages to read (including signal pages already found), what to search, when to stop | What a tool may do: only URLs from a search or a known signal page can be read; search windows; budgets checked before each call |
 | Which observations to report, with a stance per pain (supports, contradicts, irrelevant, unresolved) | Whether each observation counts: page read in this run, quote in its text, page about this company, a stated event date present in the quote, an evidence term of the pain in a supporting quote |
+| Whether to look for contrary news, and where | That it must: `evidence_backed` requires a recent-events search; a submission with support and no such search is sent back once, and without one supported pains give `needs_research` |
 | Alternative explanations and unknowns (kept as its text, labeled) | Each pain's status, the assessment status, the coverage state, the next action, the buying roles |
 | Its own proposed next action (recorded in `agent_view`, not used) | Whether the ICP decision changes: never |
 
-Assessment statuses: `evidence_backed`, `needs_research` (support and contradiction), `not_relevant` (checked sources point away), `hypothesis_only` (a signal suggests a pain, nothing checked confirms it), `insufficient_evidence`.
+Assessment statuses: `evidence_backed`, `needs_research` (support and contradiction, or support with no disconfirmation search), `not_relevant` (checked sources point away), `hypothesis_only` (a signal suggests a pain, nothing checked confirms it), `insufficient_evidence`.
 
 Next actions: `consider_persona_enrichment` (evidence-backed and ICP-qualified; a suggestion, enrichment stays a human decision), `review`, `research_more`, `defer`, `no_relevant_evidence`. An undecided ICP account (`--opportunity-include-undecided`) can at most get `review`.
 
@@ -90,7 +91,7 @@ The baseline also said `evidence_backed` here. Where they differ, case `evergree
 
 ## Measured
 
-See [`agentic-vs-deterministic.md`](agentic-vs-deterministic.md) and the generated [`evals/opportunity/REPORT.md`](../evals/opportunity/REPORT.md). In short, on 24 hand-labeled fictional cases: the baseline called 8 of 9 not-relevant cases relevant; the agent called none of them relevant and found all 8 relevant ones, with one wrong call on a case that needed a disconfirming search it did not run.
+See [`agentic-vs-deterministic.md`](agentic-vs-deterministic.md) and the generated [`evals/opportunity/REPORT.md`](../evals/opportunity/REPORT.md). In short, on 24 hand-labeled fictional cases: the baseline called 8 of 9 not-relevant cases relevant; the agent called none of them relevant and found all 8 relevant ones. A first wrong call (no disconfirming search) led to the rule that requires one; on 10 held-out cases the agent made no false positive and missed one relevant case because of the keyword rule.
 
 ## Risk boundaries
 
@@ -103,6 +104,6 @@ See [`agentic-vs-deterministic.md`](agentic-vs-deterministic.md) and the generat
 ## Limits
 
 - The subject check matches names and domains; a common-word company name can still match unrelated pages.
-- The agent is not forced to search for disconfirming evidence; in the evaluation it once relied on a single page and missed a newer hiring freeze.
+- A disconfirmation search is required before `evidence_backed`, but one search is not exhaustive coverage.
 - The evidence-term rule is a keyword list: a page that describes the problem in other words is not counted as support.
 - The evaluation is small, fictional and labeled by one person; it shows behavior, not business impact.

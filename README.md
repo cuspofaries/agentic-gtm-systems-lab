@@ -230,9 +230,11 @@ Whether a company event is evidence of the specific problem the product solves. 
 |---|---|---|
 | Relevant (8), called relevant | 6 | 8 |
 | Not relevant (9), called relevant | 8 | 0 |
-| Should abstain (7), called relevant | 6 | 1 |
+| Should abstain (7), called relevant | 6 | 0 |
+| Held out (10): false positives | 3 of 3 | 0 of 3 |
+| Held out (10): relevant found | 2 of 3 | 2 of 3 |
 
-The labels are one person's, the pages are fictional, and two code checks were fixed after seeing the first recording on the same cases. It shows behavior on known failure modes, not business impact. Details, a checks-only control and the limits: [`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md).
+The labels are one person's, the pages are fictional, and code checks were changed after seeing results on the first 24 cases; the 10 held-out cases were labeled before any model run and not used for tuning. It shows behavior on known failure modes, not business impact. Details, a checks-only control and the limits: [`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md).
 
 ## What are the limitations?
 
@@ -245,7 +247,7 @@ The labels are one person's, the pages are fictional, and two code checks were f
 
 ## What should I explore next?
 
-- Run the opportunity comparison on real accounts labeled by someone who did not write the cases, and require a disconfirming search before `evidence_backed` (the agent's one wrong call in the evaluation).
+- Run the opportunity comparison on real accounts labeled by someone who did not write the cases, and replace the evidence-term keyword rule, which caused the agent's held-out miss.
 - Turn on `require_signal_for_qualification` with `--signals exa` and compare the qualified set with and without it (see [`docs/signals.md`](docs/signals.md)).
 - Implement a Salesforce `CRMAdapter` on the same pattern as `crm/hubspot.py` (unique external ref, revalidation before each write).
 - Extend `evaluate_entry` with your organization's own hard policies.

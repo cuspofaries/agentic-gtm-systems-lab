@@ -51,3 +51,14 @@ def test_committed_cassette_replays_without_a_miss(ctx):
             ids = {o.obs_id for o in r.agent.observed_events if o.check == "quote_found"}
             assert set(h.supporting) <= ids and set(h.contradicting) <= ids
     assert m["cases"] == len(run.results)
+
+
+HOLDOUT = ROOT / "evals" / "opportunity" / "holdout.yaml"
+HOLDOUT_CASSETTE = ROOT / "evals" / "opportunity" / "holdout-cassette.json"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HOLDOUT_CASSETTE.exists(), reason="no recorded holdout cassette yet")
+def test_holdout_cassette_replays_without_a_miss(ctx):
+    run = run_eval(HOLDOUT, ctx, LLMCassette(HOLDOUT_CASSETTE, "replay"))
+    assert run.misses == [] and len(run.results) == 10

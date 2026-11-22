@@ -55,8 +55,28 @@ Both checks apply after Claude submits, so the same recording replays unchanged.
 - Labels: buying roles match the labeled set exactly in 5 of 8 relevant cases and include every labeled role in 8 of 8; the extra role is the sales sponsor when a quote mentions ramp time, which the labels did not anticipate.
 - No business impact (pipeline, revenue) is claimed or measured.
 
+### Disconfirmation search, then a held-out set
+
+After the evaluation above, the code was changed to require a disconfirmation search: a submission with supporting observations is sent back once if no recent-events search has run, and supported pains without one give `needs_research`. Before this change, 10 new cases were written and labeled (`evals/opportunity/holdout.yaml`), not seen by any model run and not used to tune anything.
+
+On the 24 cases (13 new turns recorded where the send-back changed the conversation): the agent now abstains on all 7 abstain cases, including `contradictory-growth`, where it searched, found the freeze and returned `needs_research`; relevant found 8/8, false positives 0/9. 64 LLM calls in total, 154¢.
+
+On the 10 held-out cases (recorded once, 28 turns, 67¢):
+
+| | Baseline | Checks only | Agent |
+|---|---|---|---|
+| Relevant (3), called relevant | 2 | 0 | 2 |
+| Not relevant (3), called relevant | 3 | 0 | 0 |
+| Abstain expected (4), abstained | 0 | 4 | 4 |
+
+- `ho-relevant-but-freeze-later` (support on the signal page, a hiring freeze only on a newer page): the send-back made the agent search, it found the freeze, and the code returned `needs_research`. Without the rule this is the case the agent got wrong before.
+- The agent's miss (`ho-relevant-coaching`) is the keyword rule's, not the model's: the quote "we want a standard coaching playbook so new hires reach quota faster" was attached to the `slow-ramp` pain, whose evidence terms ("ramp", "quota attainment"...) it does not contain, so the code made it `unresolved`. The model's own view was that it matched both pains. Fixing the term list after seeing this would be tuning on the held-out set; it is left as a known limit.
+- `ho-not-relevant-old-funding` was not called relevant, but as `hypothesis_only`, not `not_relevant`: the model marked the 2022 round `unresolved`, not `contradicts`.
+
+10 cases is too few for rates; the point is that no new failure mode appeared on unseen cases and the one targeted failure was fixed.
+
 ## Answer to the two questions
 
 **What does the agent decide that fixed rules cannot decide as well?** Whether a company event is evidence of the specific problem the product solves: reading the page behind a hiring or funding signal, finding the sentence that ties it to onboarding or ramp time, or the one that rules it out (evergreen, wrong team, namesake, old, incumbent), and abstaining when the pages do not settle it.
 
-**What evidence shows it is better?** On the 24 labeled cases above, against the same inputs: the signal-kind baseline made 8 false positives out of 9 not-relevant cases, the agent none, while finding 8 of 8 relevant cases to the baseline's 6. The evidence is small, fictional and labeled by one person, and one fix was made after seeing the results; it is a reason to run the same comparison on real, independently labeled accounts, not a performance claim.
+**What evidence shows it is better?** On the 24 labeled cases above, against the same inputs: the signal-kind baseline made 8 false positives out of 9 not-relevant cases, the agent none, while finding 8 of 8 relevant cases to the baseline's 6; on 10 held-out cases, 3 of 3 false positives for the baseline and none for the agent, 2 of 3 relevant cases found by each. The evidence is small, fictional and labeled by one person, and one fix was made after seeing the results; it is a reason to run the same comparison on real, independently labeled accounts, not a performance claim.
