@@ -34,13 +34,13 @@ Installed by `pip install -e ".[dev]"` into `.venv` (use `.venv/bin/gtm-lab` if 
 | `gtm-lab crm-setup --crm hubspot` | Prepares a HubSpot portal for writes (creates a unique custom property). State-changing, asks for confirmation. Only on explicit request. |
 | `gtm-lab sync <run-id> [--json]` | Write an approved plan to the CRM it was planned against (mock or HubSpot). Re-running is a no-op. |
 
-Read `--json` output or `inspect` instead of parsing the terminal tables.
+Read `--json` output or `inspect` instead of parsing the terminal tables. To say what ran and what it cost, read the `execution` block (per component, units in the key names), never the configuration.
 
 ## Offline vs LLM mode
 
 - Offline (`--offline`, the default): deterministic rules only, no network, no key.
-- Agentic (`--agentic`): accounts the rules mark `insufficient_evidence` are sent to the Anthropic API from Python, with call and spend caps. This is a paid API call made by the application. It is separate from Claude Code's own reasoning. Never run it unless the user explicitly asks for it and confirms the cost.
-- Research (`--research exa`): same accounts, but Claude searches and reads web pages in a bounded loop before deciding; evidence counts only if its quote is in a page it read. Paid (LLM and Exa). Same rule: explicit request and confirmed cost only.
+- Agentic (`--agentic`): accounts the rules mark `insufficient_evidence` are sent to the Anthropic API from Python, with call and spend caps, for an opinion that is recorded and never applied (the decision stays `insufficient_evidence`). This is a paid API call made by the application. It is separate from Claude Code's own reasoning. Never run it unless the user explicitly asks for it and confirms the cost.
+- Research (`--research exa`): same accounts, but Claude searches and reads web pages in a bounded loop and extracts facts; the code checks them against the pages, reconciles them, and the rules decide. Paid (LLM and Exa). Same rule: explicit request and confirmed cost only.
 
 ## Safety rules
 

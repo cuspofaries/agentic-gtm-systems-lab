@@ -54,7 +54,7 @@ In under 15 lines: what the lab demonstrates (the write path of a GTM workflow: 
 
 If no run id is given, run `gtm-lab runs --json`. Pick the newest run only if it is the only one; otherwise list them and ask.
 Run `gtm-lab inspect <run-id>` and walk through it in order: discovery, qualification, reconciliation (`matches`), enrichment (`costs`, `enrichment_status`), policy evaluation (`policy_failures`), approval state (`summary.plan_status`), sync state (`write_results`, `summary.writes`).
-Label each statement: **observed** (account fields as returned by the provider), **rules** (`decided_by: rules`), **LLM** (`decided_by: llm`), or **assumption** (your own inference).
+Label each statement: **observed** (account fields as returned by the provider), **rules** (`decided_by: rules`, or `hybrid`: rules re-run on facts research checked), **LLM opinion** (`decided_by: llm`: a recorded proposal, never the decision; see `llm_proposal_not_applied` in `missing`), or **assumption** (your own inference). To say what a run executed and spent, read `summary.execution`, not the flags.
 
 ### explain <run-id> <account-id>
 

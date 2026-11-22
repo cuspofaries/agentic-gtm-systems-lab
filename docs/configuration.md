@@ -140,7 +140,7 @@ Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
 
 | Command | Option | Default | Effect |
 |---|---|---|---|
-| `demo` | `--offline` / `--agentic` | `--offline` | `--agentic` sends `insufficient_evidence` accounts to Claude. Falls back to offline, and says so, if no Anthropic credentials are found. |
+| `demo` | `--offline` / `--agentic` | `--offline` | `--agentic` sends `insufficient_evidence` accounts to Claude for an opinion, recorded in `missing` as `llm_proposal_not_applied:<verdict>` and never applied: the decision stays `insufficient_evidence`. Falls back to offline, and says so, if no Anthropic credentials are found. |
 | `demo` | `--limit` | `50` | Maximum number of accounts requested from the discovery provider. |
 | `demo` | `--crm` | `mock` | CRM the plan is reconciled against: `mock` (local SQLite) or `hubspot` (needs `HUBSPOT_SERVICE_KEY`). `sync` later writes to the CRM recorded on the plan. |
 | `demo` | `--discovery` | `fixture` | Company source: `fixture` or `pdl` (needs `PDL_API_KEY`). |

@@ -90,7 +90,7 @@ CI runs all of this offline: no network, no paid call.
 
 **Buying signal.** A dated event about a company (`sales_hiring`, `new_sales_leadership`, `revenue_expansion`). An observation, not intent.
 
-**Qualification decision.** `qualified`, `not_qualified` or `insufficient_evidence`, with evidence, missing fields, confidence and `decided_by` (`rules`, `llm`, `hybrid`).
+**Qualification decision.** `qualified`, `not_qualified` or `insufficient_evidence`, with evidence, missing fields, confidence and `decided_by`: `rules`; `hybrid` (rules re-run on facts the research loop checked); `llm` (an `--agentic` opinion, always `insufficient_evidence`, its verdict kept in `missing`). Only the rules ever produce `qualified` or `not_qualified`.
 
 **Opportunity assessment.** Separate from qualification: `evidence_backed`, `needs_research`, `not_relevant`, `hypothesis_only` or `insufficient_evidence`, with observations, hypotheses, buying-role hypotheses, coverage and cost. It never changes the ICP decision.
 

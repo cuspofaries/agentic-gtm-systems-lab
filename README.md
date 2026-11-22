@@ -200,15 +200,17 @@ export ANTHROPIC_API_KEY=...       # or `ant auth login`
 gtm-lab demo --agentic --max-llm-calls 5 --max-llm-cents 50
 ```
 
-Claude (`claude-opus-5-5`) is consulted for one thing only: accounts the rules returned as `insufficient_evidence`. Everything around that call is code:
+With `--agentic`, Claude (`claude-opus-5-5`) is asked for its opinion on accounts the rules returned as `insufficient_evidence`. Its verdict is recorded as a proposal and **never changes the decision**: it sees only the data the rules already found insufficient, so it cannot bring a checked fact, and the ICP is decided by the rules alone. To fill missing facts, use `--research exa` (below). Everything around the call is code:
 
 - hard caps on the number of calls and on spend: a call starts only if its worst-case cost still fits;
 - account data is sent as untrusted data inside an `<account_data>` block;
 - the answer comes back as structured output and is validated; a refusal, an API error or a cap hit becomes `insufficient_evidence`;
-- an LLM `qualified` still goes through the same policy checks, so evidence that does not point at an observable field blocks approval;
-- each LLM decision is logged next to the deterministic baseline, and the demo prints the comparison.
+- the proposal is kept in the decision's `missing` list (`llm_proposal_not_applied:<verdict>`), with the evidence that matches the account data;
+- each proposal is logged next to the deterministic baseline, and the demo prints the comparison.
 
 Without credentials, `--agentic` says so and runs the offline mode. The LLM path is unit-tested with a fake client; it has **not** been run against the live API in CI (no key there).
+
+**What a run reports.** `gtm-lab demo --json` and `gtm-lab inspect <run-id>` include an `execution` block built from what actually ran, per component (rules, LLM opinion, company research, opportunity investigation, signal search, contact enrichment, CRM): configured or not, executed or not, accounts, calls, provider and model, cost with its unit in the key (`*_cents`, `*_millidollars` for Exa), failures, and whether calls were `simulated`, `live`, `replayed` or `recorded`. `mode` is `offline` only if nothing called a real service; `agentic` if Claude was called live; `agentic_replayed` for recorded answers; `live_providers` when real providers or a real CRM were used without Claude.
 
 ## Which components can I reuse?
 
@@ -271,7 +273,7 @@ To add another vendor, implement the interface it belongs to (`DiscoveryProvider
 The pipeline is orchestrated by code: discovery, signal search, contact search, email steps, reconciliation, policies and sync run in a fixed order with fixed rules. Claude acts in three places, all optional and capped:
 
 - **Is there evidence of the problem we solve?** With `--opportunity exa`, before any contact enrichment, Claude investigates new ICP-qualified accounts: it reads the pages behind a hiring or funding signal, searches, tests misleading explanations (evergreen posting, wrong team, namesake, old event, incumbent tool) and may abstain. The code checks every observation it reports and computes the status, the next action and the hypothetical buying roles. See [`docs/opportunity-intelligence.md`](docs/opportunity-intelligence.md).
-- **Missing company facts.** With `--research exa`, Claude searches and quotes facts the rules need (headcount, location); the code checks and reconciles the claims and the rules decide. With `--agentic`, Claude decides undecided accounts from the account data alone. See [`docs/research.md`](docs/research.md).
+- **Missing company facts.** With `--research exa`, Claude searches and quotes facts the rules need (headcount, location); the code checks and reconciles the claims and the rules decide. With `--agentic`, Claude only gives an opinion on undecided accounts; the opinion is recorded and never applied. See [`docs/research.md`](docs/research.md).
 - **Conversation.** The `/gtm-lab` skill in Claude Code runs, inspects and explains runs.
 
 Claude never decides the ICP and never writes to the CRM: its output goes into a plan and a brief that a person reviews; approval and sync are separate steps.
@@ -324,7 +326,7 @@ agentic-gtm-systems-lab/
 │   ├── context/                  ← YAML loader + Pydantic context models
 │   ├── providers/                ← interfaces, fixtures, People Data Labs, FullEnrich + ZeroBounce
 │   ├── crm/                      ← CRMAdapter + SQLite mock + HubSpot adapter
-│   ├── agents/                   ← DeterministicQualifier + LLMQualifier + Claude provider
+│   ├── agents/                   ← rules qualifier, research loop, opportunity investigator, LLM opinion, Claude provider
 │   ├── workflows/                ← Orchestrator + Reconciliation + EnrichmentBudget
 │   ├── policies/                 ← Hard policy checks before approval
 │   ├── persistence/              ← SQLite run state store
@@ -371,7 +373,7 @@ agentic-gtm-systems-lab/
 | Account discovery: fixture | Implemented and tested |
 | Account discovery: People Data Labs | Implemented; unit-tested against a fake in CI; run end to end on real companies |
 | ICP qualification (rules) | Implemented and tested |
-| ICP qualification (LLM, ambiguous cases only, `--agentic`) | Implemented, unit-tested with a fake client, never run against the live API |
+| LLM opinion on undecided accounts (`--agentic`; recorded, never applied) | Implemented, unit-tested with a fake client, never run against the live API |
 | CRM reconciliation | Implemented and tested |
 | Enrichment budget | Implemented and tested |
 | Human approval gate | Implemented and tested |

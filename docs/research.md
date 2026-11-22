@@ -8,7 +8,7 @@ gtm-lab demo --discovery pdl --research exa --research-steps 6 \
   --max-llm-cents 50 --research-exa-millidollars 50 --example-dir path/to/your-context-dir
 ```
 
-It replaces `--agentic` for those accounts: `--agentic` asks Claude to decide from the account data alone; `--research` lets it gather more. The two cannot be combined. Accounts the rules decide never reach either.
+It replaces `--agentic` for those accounts: `--agentic` asks Claude for an opinion from the account data alone, recorded and never applied; `--research` gathers facts that the rules can use. The two cannot be combined. Accounts the rules decide never reach either.
 
 ## The tools
 

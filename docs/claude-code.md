@@ -98,7 +98,7 @@ The excerpts below come from real `/gtm-lab` runs on Claude Code 2.1.330 with `c
 
 Your Claude Code login is enough for everything above: the skill only runs `gtm-lab` commands that make no LLM call. The modes below are different: the Python program itself calls the Anthropic API, so it needs its own key in the environment (`ANTHROPIC_API_KEY`, exported in the shell you start `claude` from, or an `ant auth login` profile). Your Claude Code login is not passed to it.
 
-`gtm-lab demo --agentic` is a feature of the Python app, not of Claude Code. It sends the accounts the rules could not decide to the Anthropic API under hard caps (default 5 calls, 50 cents; `--max-llm-calls`, `--max-llm-cents`) and needs `ANTHROPIC_API_KEY` or an `ant auth login` profile. Those calls are billed to that key, separately from your Claude Code session. The same applies to `--research exa` and `--opportunity exa` (which also need `EXA_API_KEY`) and to `gtm-lab opportunity-eval --record` / `--extend`.
+`gtm-lab demo --agentic` is a feature of the Python app, not of Claude Code. It sends the accounts the rules could not decide to the Anthropic API for an opinion that is recorded and never changes the decision, under hard caps (default 5 calls, 50 cents; `--max-llm-calls`, `--max-llm-cents`) and needs `ANTHROPIC_API_KEY` or an `ant auth login` profile. Those calls are billed to that key, separately from your Claude Code session. The same applies to `--research exa` and `--opportunity exa` (which also need `EXA_API_KEY`) and to `gtm-lab opportunity-eval --record` / `--extend`.
 
 The skill never runs it from `/gtm-lab demo`. It runs it only if you ask for it explicitly and confirm the cost, and the command still goes through a permission prompt.
 

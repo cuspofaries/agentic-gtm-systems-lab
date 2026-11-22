@@ -14,7 +14,7 @@ plan (gtm-lab demo)
   2. signal search        Exa (opt-in, --signals exa)          ◆ signal budget  Data Layer
      accounts persisted with provenance, fields_missing, signal_search         Data Foundation
   3. ICP qualification    rules                                                 GTM Brain + code
-       └─ undecided only  research loop (opt-in, --research exa) or LLM (--agentic)
+       └─ undecided only  research loop (opt-in, --research exa) or LLM opinion (--agentic, never applied)
                           ◆ claims checked, reconciled; rules re-decide       Agentic Intelligence
   4. CRM reconciliation   canonical domain vs CRM, in-batch dedup               Data Layer
   5. opportunity          baseline (no AI) + investigator (opt-in, --opportunity exa)
