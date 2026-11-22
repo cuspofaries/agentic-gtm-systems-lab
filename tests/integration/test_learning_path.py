@@ -85,14 +85,19 @@ def _edit_case(fixture: Path, account_id: str, **fields):
 
 
 def test_every_quoted_gtm_lab_command_and_option_exists():
-    runner = CliRunner()
+    # Read the options from the command definitions, not from --help (whose rendering
+    # depends on the terminal: colors and wrapping differ in CI).
+    import typer
+
+    group = typer.main.get_command(app)
     commands = re.findall(r"^\s*gtm-lab ([a-z-]+)((?: [^\n|#]*)?)", DOC, flags=re.M)
     assert commands
     for sub, rest in commands:
-        res = runner.invoke(app, [sub, "--help"])
-        assert res.exit_code == 0, f"gtm-lab {sub} does not exist"
+        cmd = group.commands.get(sub)
+        assert cmd is not None, f"gtm-lab {sub} does not exist"
+        known = {o for p in cmd.params for o in (*p.opts, *p.secondary_opts)}
         for opt in re.findall(r"(--[a-z][a-z-]+)", rest):
-            assert opt in res.output, f"gtm-lab {sub} has no option {opt}"
+            assert opt in known, f"gtm-lab {sub} has no option {opt}"
 
 
 def test_every_quoted_pytest_selection_selects_something():
