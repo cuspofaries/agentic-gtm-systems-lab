@@ -187,9 +187,29 @@ Key guarantees:
 
 ## How do I integrate real providers?
 
-Each provider is an interface (`DiscoveryProvider`, `EnrichmentProvider`, `CRMAdapter`). Implement the methods against your actual vendor and inject the class into `AccountDiscoveryWorkflow`. The orchestrator doesn't know or care which provider is behind the interface.
+Four real providers ship. Each one is off by default and turned on by a flag; its key is read from an environment variable (the CLI does not read `.env` files).
 
-A HubSpot adapter ships: `gtm-lab demo --crm hubspot`, then approve and sync as usual. It was run end to end against a HubSpot test portal; see [`docs/hubspot.md`](docs/hubspot.md) for setup and the HubSpot behaviors it has to work around. See [`docs/integration-guide.md`](docs/integration-guide.md) for outlines of other adapters (Clay, Apollo, Salesforce).
+| Provider | Role in the workflow | Key (env var) | Flag | Cost | Setup |
+|---|---|---|---|---|---|
+| People Data Labs | Finds companies, then people at each qualified company | `PDL_API_KEY` | `--discovery pdl`, `--enrichment pdl` | 1 credit per record returned; free plan returns no emails | [`docs/pdl.md`](docs/pdl.md) |
+| FullEnrich | Finds the work email of contacts that have none | `FULLENRICH_API_KEY` | `--email-finder fullenrich` | 1 credit per email found, none when nothing is found | [`docs/email.md`](docs/email.md) |
+| ZeroBounce | Checks every email before it can reach the CRM | `ZEROBOUNCE_API_KEY` | `--email-verifier zerobounce` | 1 credit per check, none for `unknown` | [`docs/email.md`](docs/email.md) |
+| HubSpot | Reconciles the plan against a real portal, then writes approved records | `HUBSPOT_SERVICE_KEY` | `--crm hubspot` | Free test portal | [`docs/hubspot.md`](docs/hubspot.md) |
+
+All of them on one run, against your own context directory (kept out of the repository):
+
+```bash
+export PDL_API_KEY=... FULLENRICH_API_KEY=... ZEROBOUNCE_API_KEY=... HUBSPOT_SERVICE_KEY=...
+gtm-lab crm-setup --crm hubspot          # once per portal, asks for confirmation
+gtm-lab demo --discovery pdl --enrichment pdl \
+  --email-finder fullenrich --email-verifier zerobounce \
+  --crm hubspot --limit 15 --profiles-per-account 2 \
+  --example-dir path/to/your-context-dir
+```
+
+Every paid call counts against `policy.enrichment_budget_cents` in `gtm-context.yaml`, checked before the call against its maximum cost. Credits are converted to cents with `--email-finder-cents` and `--email-verifier-cents`; set them to your plan's price. Company search terms (`discovery.pdl_industries`, `discovery.pdl_tags`), the treatment of unverified emails (`contacts.on_unverified_email`) and the HubSpot legal basis are set in the same file; every key is in [`docs/configuration.md`](docs/configuration.md).
+
+To add another vendor, implement the interface it belongs to (`DiscoveryProvider`, `EnrichmentProvider`, `CRMAdapter`) and inject the class into `AccountDiscoveryWorkflow`; the orchestrator does not know which provider is behind the interface. [`docs/integration-guide.md`](docs/integration-guide.md) outlines other adapters (Clay, Apollo, Salesforce).
 
 ## How agentic is it?
 
