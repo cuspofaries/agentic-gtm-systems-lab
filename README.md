@@ -272,7 +272,7 @@ agentic-gtm-systems-lab/
 ├── examples/account-discovery-to-crm/
 │   ├── config/gtm-context.yaml
 │   └── fixtures/{discovery,enrichment,crm-seed}.yaml
-├── evals/opportunity/            ← 24 labeled cases, recorded Claude answers, generated REPORT.md
+├── evals/opportunity/            ← labeled cases (24 + 10 held out), recorded Claude answers, generated reports
 ├── tests/
 │   ├── unit/                     ← components, and every real provider against a fake transport
 │   ├── integration/              ← end-to-end, no-network, CLI and Claude Code skill checks
@@ -326,7 +326,7 @@ agentic-gtm-systems-lab/
 | Labeled benchmark for the LLM step | Planned - not implemented |
 | Dated buying signals (Exa) | Implemented; unit-tested against a fake in CI; run on two real companies |
 | Agent choosing its own research steps in a bounded loop (`--research exa`) | Implemented; claims checked and reconciled by code, rules decide; tested with a scripted Claude client and a fake Exa in CI; an earlier version run against the real API on two real companies |
-| Opportunity assessment and brief (`--opportunity exa`, `gtm-lab opportunity`) | Implemented; evaluated against a no-AI baseline on 24 labeled fictional cases with recorded Claude answers (replayed in CI); not yet run on real accounts |
+| Opportunity assessment and brief (`--opportunity exa`, `gtm-lab opportunity`) | Implemented; evaluated against a no-AI baseline on 24 labeled fictional cases plus 10 held-out ones, with recorded Claude answers (replayed in CI); not yet run on real accounts |
 
 ## Contributing
 

@@ -1,6 +1,6 @@
 # Opportunity Intelligence: implementation report
 
-Branch `feat/opportunity-intelligence`. Not merged.
+Merged in PR #12 (`feat/opportunity-intelligence`) and PR #13 (`feat/disconfirmation-search`).
 
 ## 1. Baseline audit
 
@@ -83,7 +83,7 @@ Two code checks were then fixed, on the same cases (no held-out set): the subjec
 
 The subject fix recovered two relevant cases and also let one abstain case through (`contradictory-growth`): the agent read one page and did not search for the newer hiring freeze. Coverage state correct where labeled: 2/3 (`source-unavailable` is labeled `failed`; the code says `incomplete` because a search worked). Buying roles: exact match 5/8, every labeled role included 8/8 (the extra role is the sales sponsor when a quote mentions ramp time).
 
-Cost per assessed case: 2.1 LLM calls, 5 cents. Latency: one recording, 175 s for 24 cases including the two no-AI assessors; not measured further.
+Cost per assessed case in this first recording: 2.1 LLM calls, 5 cents (2.7 calls, 6.4 cents after the disconfirmation rule). Latency: one recording, 175 s for 24 cases including the two no-AI assessors; not measured further.
 
 ### Follow-up: disconfirmation search and held-out cases
 
@@ -91,8 +91,8 @@ Cost per assessed case: 2.1 LLM calls, 5 cents. Latency: one recording, 175 s fo
 
 ## 7. Tests run
 
-- Full suite: 200 passed, 2 skipped (live HubSpot, private real-data case), ruff clean. CI runs the same, with no network and no paid call; the opportunity evaluation replays the committed cassette.
-- Paid runs in this work: the evaluation recording (120 cents, authorized by the maintainer).
+- Full suite: 203 passed, 2 skipped (live HubSpot, private real-data case), ruff clean. CI runs the same, with no network and no paid call; the opportunity evaluation replays the committed cassette.
+- Paid runs in this work, all authorized by the maintainer: the first evaluation recording (120 cents), the extension after the disconfirmation rule (34 cents) and the held-out recording (67 cents).
 - Not run: `demo --opportunity exa` on real companies; the private real-data research case was not re-recorded after the claims change (its cassette is stale, kept out of the repository).
 
 ## 8. Risks, debt, next slice

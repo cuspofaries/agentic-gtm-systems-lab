@@ -158,7 +158,7 @@ Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
 | `demo` | `--opportunity-include-undecided` | off | Also assess accounts the ICP left `insufficient_evidence`. Never promotes them. |
 | `demo` | `--opportunity-exa-millidollars` | `50` | Opportunity only: Exa spend cap per run. The LLM cap is `--max-llm-cents`. |
 | `opportunity` | `RUN_ID`, `--json` | | The run's Account Opportunity Brief, from persisted state. |
-| `opportunity-eval` | `--record`, `--report FILE`, `--json`, `--cases`, `--cassette` | replay | Baseline vs checks-only vs agent on the labeled cases. Replays the cassette by default (free); `--record` calls the API (paid). Exit 1 if a replay misses a recorded request. |
+| `opportunity-eval` | `--record`, `--extend`, `--report FILE`, `--json`, `--cases`, `--cassette` | replay | Baseline vs checks-only vs agent on the labeled cases. Replays the cassette by default (free). `--record` calls the API for every turn, `--extend` only for turns missing from the cassette (both paid). Exit 1 if a replay misses a recorded request. Held-out set: `--cases evals/opportunity/holdout.yaml --cassette evals/opportunity/holdout-cassette.json`. |
 | `demo`, `runs`, `eval`, `sync` | `--json` | off | Structured output instead of tables. |
 | `demo` | `--max-llm-calls` | `5` | Agentic mode only. Hard cap on LLM calls per run. Past the cap, accounts stay `insufficient_evidence`. |
 | `demo` | `--max-llm-cents` | `50` | Agentic, research and opportunity modes. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |

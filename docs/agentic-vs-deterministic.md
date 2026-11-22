@@ -12,7 +12,7 @@
 
 Claude never decides the ICP, never writes to the CRM, and its proposed next action is recorded but not used.
 
-## Evidence: baseline vs agent on 24 labeled cases
+## Evidence: baseline vs agent on 24 labeled cases (before the disconfirmation rule)
 
 `gtm-lab opportunity-eval` (free, offline; replays `evals/opportunity/cassette.json`). Cases in `evals/opportunity/cases.yaml`: fictional companies, a fictional web, labels written by hand by the case author from the page text before any model output was seen. One person's labels, not independent ground truth.
 

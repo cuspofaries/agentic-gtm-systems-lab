@@ -72,20 +72,20 @@ gtm-lab opportunity <run-id> --json   # the same, structured
 
 `demo` also writes `opportunity_<run-id>.md` next to the review artifact, and `gtm-lab inspect` includes `opportunity_assessments`. In Claude Code: `/gtm-lab opportunity <run-id>` (read-only).
 
-Cost: Claude is called a few times per assessed account (measured below: 2.1 calls and 5¢ on average), Exa searches $0.004 and page reads $0.001. Both caps are per run and checked before each call.
+Cost: Claude is called a few times per assessed account (measured in the evaluation: 2.7 calls and 6.4¢ on average), Exa searches $0.004 and page reads $0.001. Both caps are per run and checked before each call.
 
 ## Worked example (real output)
 
 From the evaluation, case `relevant-sdr-onboarding` (fictional company and page, Claude's answer recorded from the API and replayed). The page says: "Brightline Metrics is hiring six Sales Development Representatives as we double the sales team this year. New reps join a four-week onboarding program; we are rebuilding it to cut ramp time from five months to three."
 
-- Steps: one `read` of the signal page (no new search was needed).
+- Steps: `read` of the signal page; a first `submit`, sent back by the code because no recent-events search had run; a `search` (purpose `recent_events`, 1 result); the final `submit`.
 - Observations, both `quote_found` on `page-1`:
   - `obs-1` supports `slow-ramp`: "we are rebuilding it to cut ramp time from five months to three"
   - `obs-2` unresolved for `onboarding-at-scale`: "hiring six Sales Development Representatives as we double the sales team this year" (a hiring quote without an evidence term is not support)
 - Status `evidence_backed`, next action `consider_persona_enrichment`, roles: enablement owner, sales sponsor, RevOps stakeholder (hypotheses).
-- Claude's alternative explanations: "The posting may be evergreen. The page text gives no date, and only the search metadata shows 2026-11-16." Unknowns: "Whether Brightline already uses an enablement platform".
+- Claude's alternative explanations: "The posting may be evergreen. The page text gives no date, and only the search metadata shows 2026-11-16." Unknowns include "The recent-events search found no other news, so there is no outside confirmation either way".
 - Claude's own proposal was `review`; the code's rule gave `consider_persona_enrichment`. The code is the more eager of the two here.
-- Cost: 2 LLM calls, 5¢.
+- Cost: 4 LLM calls, 10¢.
 
 The baseline also said `evidence_backed` here. Where they differ, case `evergreen-posting`: the baseline calls the SDR posting relevant; the agent read "we are not hiring for a specific opening right now", reported it as contradicting, and the code returned `not_relevant` → `defer`.
 

@@ -24,6 +24,7 @@ Then type `/gtm-lab`. The skill lives in `.claude/skills/gtm-lab/SKILL.md` and i
 | `/gtm-lab demo` | Runs `gtm-lab demo --offline --json`, explains the result, stops at approval | Creates a proposed run. No CRM write, no LLM |
 | `/gtm-lab inspect [run-id]` | Walks through a run step by step from `gtm-lab inspect` | No |
 | `/gtm-lab explain <run-id> <account-id>` | Why one account was qualified, enriched, skipped or written | No |
+| `/gtm-lab opportunity <run-id>` | Reads the run's Account Opportunity Brief: evidence, hypotheses, roles, next action, baseline next to the agent | No |
 | `/gtm-lab eval <run-id>` | Runs the four integrity checks and explains them | No |
 | `/gtm-lab debug <run-id>` | Finds problems in the persisted state and proposes a safe next step | No |
 | `/gtm-lab approve <run-id>` | Summarizes the review artifact, asks you to confirm, approves | Plan `proposed` → `approved`. No CRM write |
