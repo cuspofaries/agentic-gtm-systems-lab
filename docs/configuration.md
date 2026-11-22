@@ -118,11 +118,11 @@ Optional; required by `--opportunity`. The example config has a complete set. Se
 | Key | Fields | Effect |
 |---|---|---|
 | `offers` | `id`, `name`, `target_problem`, `value_proposition`, `pains` (pain ids), `exclusions`, `evidence_expectations` | The first offer is the one assessed. Its text is given to the investigator. |
-| `pain_points` | `id`, `description`, `evidence_terms`, `supporting_events`, `weakening_events` | A supporting quote must contain one of `evidence_terms`, or its stance becomes `unresolved`. |
-| `buying_roles` | `id`, `role` (`problem_owner`, `sponsor`, `stakeholder`, `user`), `title_hints`, `why`, `pains` | Roles listed for supported pains. Hypotheses, never people. |
+| `pain_points` | `id`, `description`, `evidence_terms`, `supporting_events`, `weakening_events` | `evidence_terms` are recorded as a diagnostic on each semantic match (and used by the keyword-only control in the evaluation); support is decided by the independent semantic check. |
+| `buying_roles` | `id`, `role` (`problem_owner`, `sponsor`, `stakeholder`, `user`), `title_hints`, `why`, `pains`, `personas` | Roles listed for supported pains. Hypotheses, never people. `personas` (names from `personas`) are the personas enriched for the role in `opportunity_gated` mode; a supported role without one sends the account to review. |
 | `signal_interpretation` | `signal_kind`, `may_suggest` (pain ids), `misleading_alternatives` | What the baseline maps a signal to, and what the investigator is asked to rule out. |
 
-Pain ids that do not exist are rejected when the context loads.
+Pain ids and persona names that do not exist are rejected when the context loads.
 
 ### `crm`
 
@@ -157,8 +157,11 @@ Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
 | `demo` | `--opportunity` | `none` | `exa` assesses new, ICP-qualified accounts for the offer's problem before enrichment (Claude plus Exa; needs `ANTHROPIC_API_KEY`, `EXA_API_KEY` and `offers` in the context). Writes `opportunity_<run-id>.md`. |
 | `demo` | `--opportunity-include-undecided` | off | Also assess accounts the ICP left `insufficient_evidence`. Never promotes them. |
 | `demo` | `--opportunity-exa-millidollars` | `50` | Opportunity only: Exa spend cap per run. The LLM cap is `--max-llm-cents`. |
+| `demo` | `--enrichment-strategy` | `all_qualified` | `opportunity_gated` calls the contact provider only when the opportunity action policy proposes it, for the mapped personas; everything else is skipped as `deferred_by_policy`. Needs `--opportunity` to enrich anything (fail closed). |
+| `demo` | `--opportunity-scope` | `new` | `all` also assesses accounts already in the CRM, read-only. |
 | `opportunity` | `RUN_ID`, `--json` | | The run's Account Opportunity Brief, from persisted state. |
-| `opportunity-eval` | `--record`, `--extend`, `--report FILE`, `--json`, `--cases`, `--cassette` | replay | Baseline vs checks-only vs agent on the labeled cases. Replays the cassette by default (free). `--record` calls the API for every turn, `--extend` only for turns missing from the cassette (both paid). Exit 1 if a replay misses a recorded request. Held-out set: `--cases evals/opportunity/holdout.yaml --cassette evals/opportunity/holdout-cassette.json`. |
+| `decision-eval` | `--contact-cents`, `--record`, `--extend`, `--report FILE`, `--json`, `--cases`, `--cassette` | replay, 80 | Compares `all_qualified`, `baseline_gated` and `opportunity_gated` on `evals/decisions/cases.yaml`: enrichments, misses, wasted enrichments, simulated contact cost, observed LLM and Exa cost, persona precision and recall, research quality. Free by default; `--record` and `--extend` are paid. |
+| `opportunity-eval` | `--record`, `--extend`, `--report FILE`, `--json`, `--cases`, `--cassette` | replay | Baseline vs checks-only vs agent on the labeled cases. Replays the cassette by default (free). `--record` calls the API for every turn, `--extend` only for turns missing from the cassette (both paid). Exit 1 if a replay misses a recorded request. The v1 recordings of the 24 and 10 cases are in `evals/opportunity/v1/` and replay with the v1 code (commit `48ca5e2`); there is no default cassette for the current agent on these cases. |
 | `demo`, `runs`, `eval`, `sync` | `--json` | off | Structured output instead of tables. |
 | `demo` | `--max-llm-calls` | `5` | Agentic mode only. Hard cap on LLM calls per run. Past the cap, accounts stay `insufficient_evidence`. |
 | `demo` | `--max-llm-cents` | `50` | Agentic, research and opportunity modes. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |

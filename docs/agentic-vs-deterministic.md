@@ -14,7 +14,7 @@ Claude never decides the ICP, never writes to the CRM, and its proposed next act
 
 ## Evidence: baseline vs agent on 24 labeled cases (before the disconfirmation rule)
 
-`gtm-lab opportunity-eval` (free, offline; replays `evals/opportunity/cassette.json`). Cases in `evals/opportunity/cases.yaml`: fictional companies, a fictional web, labels written by hand by the case author from the page text before any model output was seen. One person's labels, not independent ground truth.
+Agent v1, recorded in `evals/opportunity/v1/` (replays with the v1 code at commit `48ca5e2`). Cases in `evals/opportunity/cases.yaml`: fictional companies, a fictional web, labels written by hand by the case author from the page text before any model output was seen. One person's labels, not independent ground truth.
 
 Three assessors on the same inputs:
 
@@ -75,8 +75,36 @@ On the 10 held-out cases (recorded once, 28 turns, 67¢):
 
 10 cases is too few for rates; the point is that no new failure mode appeared on unseen cases and the one targeted failure was fixed.
 
+## Agent v2 and the enrichment decision
+
+The results above are agent v1 (frozen in `evals/opportunity/v1/`). Agent v2 replaced the keyword gate with an independent semantic check, made disconfirmation an audited list of checks, and added the opportunity action policy that decides paid contact enrichment. It was evaluated on 16 new cases (`evals/decisions/cases.yaml`), labeled before any v2 run, on a query-sensitive fictional web (a page comes back only for a query that names the company and matches its topic), with truncated pages, search errors and namesake noise. `gtm-lab decision-eval` replays it for free.
+
+Which accounts get paid contact enrichment (contacts simulated at 80¢ per account; LLM and Exa observed):
+
+| | Enrich every qualified account (default) | Gate on the signal kind | Gate on the agent's assessment |
+|---|---|---|---|
+| Enriched | 15 | 15 | 2 |
+| Relevant enriched | 4 of 4 | 4 of 4 | 2 of 4 |
+| Enriched but not relevant or abstain expected | 11 | 11 | 0 |
+| Total cost | 1200¢ | 1200¢ | 274¢ (160 contacts + 105 LLM + 9 Exa) |
+
+Opportunity labels on the same cases:
+
+| | Signal-kind baseline | Keyword rule (no model) | Agent v2 |
+|---|---|---|---|
+| Relevant (5), called relevant | 5 | 1 | 3 |
+| Not relevant (5), called relevant | 5 | 2 | 0 |
+| Abstain expected (6), abstained | 0 | 6 | 5 |
+
+- Both paraphrase cases (the problem stated in words that are not in the keyword list) were recognized; the keyword rule found neither, and it accepted a customer-onboarding page that the agent did not.
+- The two relevant accounts the gate missed were both caused by one rule: a clearing check counts only if every search result was read, and the agent left an unrelated result unopened. The prompt asks for "relevant results", the code for all of them. Not fixed on this set.
+- One abstain miss: a truncated page (the relevant sentence was past what can be read); the agent concluded `not_relevant`.
+- Observations grounded: 22 of 23; disconfirmation checks credited by the code: 6 of 9 claimed.
+
+These are 16 cases with 4 relevant qualified accounts: per-case evidence, not a rate. Full report: `DECISION_AWARE_GTM_EVOLUTION_REPORT.md`.
+
 ## Answer to the two questions
 
-**What does the agent decide that fixed rules cannot decide as well?** Whether a company event is evidence of the specific problem the product solves: reading the page behind a hiring or funding signal, finding the sentence that ties it to onboarding or ramp time, or the one that rules it out (evergreen, wrong team, namesake, old, incumbent), and abstaining when the pages do not settle it.
+**What does the agent decide that fixed rules cannot decide as well?** Whether a company event is evidence of the specific problem the product solves, and therefore whether an account is worth paid contact enrichment and for which roles: reading the page behind a hiring or funding signal, finding the sentence that ties it to onboarding or ramp time, or the one that rules it out (evergreen, wrong team, namesake, old, incumbent), and abstaining when the pages do not settle it.
 
-**What evidence shows it is better?** On the 24 labeled cases above, against the same inputs: the signal-kind baseline made 8 false positives out of 9 not-relevant cases, the agent none, while finding 8 of 8 relevant cases to the baseline's 6; on 10 held-out cases, 3 of 3 false positives for the baseline and none for the agent, 2 of 3 relevant cases found by each. The evidence is small, fictional and labeled by one person, and one fix was made after seeing the results; it is a reason to run the same comparison on real, independently labeled accounts, not a performance claim.
+**What evidence shows it is better?** On the 24 labeled cases above, against the same inputs: the signal-kind baseline made 8 false positives out of 9 not-relevant cases, the agent none, while finding 8 of 8 relevant cases to the baseline's 6; on 10 held-out cases, 3 of 3 false positives for the baseline and none for the agent, 2 of 3 relevant cases found by each. On 16 new decision cases with agent v2, gating enrichment on its assessment bought 2 enrichments instead of 15, avoided all 11 wasted ones and cost 274¢ instead of 1200¢, but missed 2 of 4 relevant accounts. The evidence is small, fictional and labeled by one person, and one fix was made after seeing the results; it is a reason to run the same comparison on real, independently labeled accounts, not a performance claim.

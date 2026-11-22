@@ -25,9 +25,13 @@ discovery ──► signals (optional, --signals exa) ──► ICP rules ──
                                                                bounded, per account)        roles, signal
                                                                       │                     interpretation)
                                                                       ▼
-                                                     Account Opportunity Brief (no write)
+                                                     opportunity action policy (code)
+                                                     propose_enrichment / defer /
+                                                     research_more / review
                                                                       │
-                                    contact enrichment ──► policies ──► human approval ──► sync
+                                     Account Opportunity Brief (no write)
+                                                                      │
+        contact enrichment (gated: proposed accounts, mapped personas) ──► policies ──► human approval ──► sync
 ```
 
 ICP fit and opportunity relevance are two decisions with two records: `QualificationDecision` (unchanged) and `OpportunityAssessment` (new, linked by account id).
@@ -37,35 +41,55 @@ ICP fit and opportunity relevance are two decisions with two records: `Qualifica
 Optional keys in `gtm-context.yaml` (see the example config and [`configuration.md`](configuration.md)):
 
 - `offers`: the product, the problem it solves, its pain ids, exclusions (for example "already uses a dedicated onboarding platform") and the evidence expected.
-- `pain_points`: each pain with `evidence_terms` (words a supporting quote must contain, such as "ramp" or "onboarding"), supporting and weakening events.
-- `buying_roles`: roles linked to pains (problem owner, sponsor, stakeholder, user) with title hints and a reason. They are hypotheses about who might care, never people.
+- `pain_points`: each pain with `evidence_terms` (typical words such as "ramp" or "onboarding", recorded as a diagnostic; support is decided by the semantic check), supporting and weakening events.
+- `buying_roles`: roles linked to pains (problem owner, sponsor, stakeholder, user) with title hints, a reason, and `personas`: the contact-provider personas to enrich for that role in gated mode. They are hypotheses about who might care, never people.
 - `signal_interpretation`: which pains a signal kind may suggest, and the misleading alternatives to test.
 - `research_policy`: `opportunity_max_accounts` (default 3 per run), `opportunity_max_steps` (default 8 tool calls per account), `company_facts_max_age_days` (default 730).
 
-Unknown pain ids are rejected when the context loads.
+Unknown pain ids and persona names are rejected when the context loads.
 
 ## What the agent decides, what the code decides
 
 | Decided by Claude | Decided by code |
 |---|---|
 | Which pages to read (including signal pages already found), what to search, when to stop | What a tool may do: only URLs from a search or a known signal page can be read; search windows; budgets checked before each call |
-| Which observations to report, with a stance per pain (supports, contradicts, irrelevant, unresolved) | Whether each observation counts: page read in this run, quote in its text, page about this company, a stated event date present in the quote, an evidence term of the pain in a supporting quote |
-| Whether to look for contrary news, and where | That it must: `evidence_backed` requires a recent-events search; a submission with support and no such search is sent back once, and without one supported pains give `needs_research` |
+| Which observations to report, with a stance per pain and a rationale | Whether each observation counts: page read in this run, quote in its text, page about this company, a stated event date present in the quote |
+| That a quote expresses a pain, in any wording | Whether that reading stands: an independent, constrained LLM check sees only the quote and the pain and answers expresses / negates / unrelated / unclear (`SemanticPainMatch`); only `expresses` counts, failures fail closed; the keyword hit is recorded as a diagnostic |
+| Which competing explanation to test and with which search | Whether the check is credited (`DisconfirmationCheck`): the exact query ran as a recent-events search naming the company, and every result was read (or none came back: "not found in checked sources", not proof); a contradiction needs a checked quote from that search's results. `evidence_backed` needs a credited clearing check for the supported pain; a submission without one is sent back once |
 | Alternative explanations and unknowns (kept as its text, labeled) | Each pain's status, the assessment status, the coverage state, the next action, the buying roles |
 | Its own proposed next action (recorded in `agent_view`, not used) | Whether the ICP decision changes: never |
 
-Assessment statuses: `evidence_backed`, `needs_research` (support and contradiction, or support with no disconfirmation search), `not_relevant` (checked sources point away), `hypothesis_only` (a signal suggests a pain, nothing checked confirms it), `insufficient_evidence`.
+Assessment statuses: `evidence_backed`, `needs_research` (support and contradiction, or support without a credited disconfirmation check), `not_relevant` (checked sources point away), `hypothesis_only` (a signal suggests a pain, nothing checked confirms it), `insufficient_evidence`.
 
 Next actions: `consider_persona_enrichment` (evidence-backed and ICP-qualified; a suggestion, enrichment stays a human decision), `review`, `research_more`, `defer`, `no_relevant_evidence`. An undecided ICP account (`--opportunity-include-undecided`) can at most get `review`.
 
 Coverage: `found`, `checked_no_result`, `incomplete` (budget ran out, or a source failed while others worked), `failed` (every call failed), `not_attempted`. A search with no result, a failed page or an exhausted budget is never read as "this account does not have the problem": `no_relevant_evidence` means "nothing found", not "out of market".
+
+## From assessment to spend: opportunity-gated enrichment
+
+By default (`--enrichment-strategy all_qualified`) every new ICP-qualified account is enriched with every persona, as before; when an investigator ran, each entry also records a shadow estimate of what gating would have done. With `--enrichment-strategy opportunity_gated`, a deterministic action policy (`policies/opportunity_action.py`) decides from the agent's checked assessment, and the contact provider is called only for `propose_enrichment`:
+
+| Assessment | Action | Contact provider |
+|---|---|---|
+| `evidence_backed`, coverage `found`, no dropped claim, roles mapped to personas | `propose_enrichment` | called, mapped personas only |
+| `not_relevant` | `defer` | not called |
+| `needs_research`, `hypothesis_only` | `research_more` | not called |
+| `insufficient_evidence` | `review`, or `research_more` if coverage was incomplete or failed | not called |
+| no agent assessment (cap reached, not selected, baseline only) | `review` ("not assessed" is never "not relevant") | not called |
+| dropped claims, a supported role without a persona mapping | `review` | not called |
+| ICP not qualified | `review`; opportunity evidence never promotes it | not called |
+
+Personas come from `buying_roles[].personas` (validated against `personas`). Deferred accounts are skipped entries: they are not proposed for a CRM write. Each entry carries an `OpportunityAction` (status, action, reason, personas and why, calls avoided, cost avoided at the provider's announced maximum, actual cost), shown in `gtm-lab opportunity <run-id>`. A proposed enrichment still goes through budgets, policies and human approval.
+
+`--opportunity-scope all` also assesses accounts already in the CRM, read-only: they stay `skip_existing`, nothing is written or enriched. Contact-gap plans and contact updates for existing accounts are not implemented.
 
 ## Use
 
 ```bash
 export EXA_API_KEY=... ANTHROPIC_API_KEY=...
 gtm-lab demo --discovery pdl --signals exa --opportunity exa --max-llm-cents 50 \
-  --opportunity-exa-millidollars 50 --example-dir path/to/your-context-dir
+  --opportunity-exa-millidollars 50 --enrichment-strategy opportunity_gated \
+  --example-dir path/to/your-context-dir
 gtm-lab opportunity <run-id>          # the brief, Markdown
 gtm-lab opportunity <run-id> --json   # the same, structured
 ```
@@ -76,22 +100,20 @@ Cost: Claude is called a few times per assessed account (measured in the evaluat
 
 ## Worked example (real output)
 
-From the evaluation, case `relevant-sdr-onboarding` (fictional company and page, Claude's answer recorded from the API and replayed). The page says: "Brightline Metrics is hiring six Sales Development Representatives as we double the sales team this year. New reps join a four-week onboarding program; we are rebuilding it to cut ramp time from five months to three."
+From the decision evaluation, case `d-paraphrase-coaching` (fictional company and page; Claude's answers recorded from the API and replayed). The signal page says: "Silverline Desk is growing its SDR team from 4 to 12. Every new SDR is currently taught differently depending on who sits next to them; this lead will create one consistent way to get new reps productive." None of the pain's keywords appears.
 
-- Steps: `read` of the signal page; a first `submit`, sent back by the code because no recent-events search had run; a `search` (purpose `recent_events`, 1 result); the final `submit`.
-- Observations, both `quote_found` on `page-1`:
-  - `obs-1` supports `slow-ramp`: "we are rebuilding it to cut ramp time from five months to three"
-  - `obs-2` unresolved for `onboarding-at-scale`: "hiring six Sales Development Representatives as we double the sales team this year" (a hiring quote without an evidence term is not support)
-- Status `evidence_backed`, next action `consider_persona_enrichment`, roles: enablement owner, sales sponsor, RevOps stakeholder (hypotheses).
-- Claude's alternative explanations: "The posting may be evergreen. The page text gives no date, and only the search metadata shows 2026-11-16." Unknowns include "The recent-events search found no other news, so there is no outside confirmation either way".
-- Claude's own proposal was `review`; the code's rule gave `consider_persona_enrichment`. The code is the more eager of the two here.
-- Cost: 4 LLM calls, 10¢.
+- Steps: `read` of the signal page; `search` (recent_events) "Silverline Desk sales enablement platform hiring freeze layoffs", 1 result.
+- Observations, both `quote_found`: "Every new SDR is currently taught differently depending on who sits next to them" (supports `onboarding-at-scale`) and "create one consistent way to get new reps productive" (supports `slow-ramp`).
+- Semantic checks: both `verified` by the independent check, `lexical_term_hit: false`. Its reason for the first: "each new SDR is trained differently depending on who sits next to them. That means sales-hire onboarding has no standard, repeatable process."
+- Disconfirmation: two checks on that search, both credited ("all 1 result(s) read").
+- Status `evidence_backed`; policy `propose_enrichment` for Sales Enablement, VP Sales, Head of Sales, Revenue Operations. Claude's own proposal was `review`.
+- Cost: 5 LLM calls (including 2 verifications), 9¢; Exa $0.005.
 
-The baseline also said `evidence_backed` here. Where they differ, case `evergreen-posting`: the baseline calls the SDR posting relevant; the agent read "we are not hiring for a specific opening right now", reported it as contradicting, and the code returned `not_relevant` → `defer`.
+Contrast, `d-freeze-only-via-search`: the signal page supports slow ramp ("redesigning sales onboarding because new reps take too long to ramp", verified). The agent's recent-events search returned a newer page, which it read: "Ember Analytics froze sales hiring this week and paused its onboarding redesign." The contradiction is credited, the status is `needs_research`, the policy says `research_more`, and no contact is bought. The signal-kind baseline would have enriched it.
 
 ## Measured
 
-See [`agentic-vs-deterministic.md`](agentic-vs-deterministic.md) and the generated [`evals/opportunity/REPORT.md`](../evals/opportunity/REPORT.md). In short, on 24 hand-labeled fictional cases: the baseline called 8 of 9 not-relevant cases relevant; the agent called none of them relevant and found all 8 relevant ones. A first wrong call (no disconfirming search) led to the rule that requires one; on 10 held-out cases the agent made no false positive and missed one relevant case because of the keyword rule.
+On 16 new decision cases (`gtm-lab decision-eval`, labeled before any run of this version): enriching every qualified account bought 15 enrichments, 11 of them for accounts that should not have been enriched; gating on the agent's assessment bought 2, both relevant, at 274¢ in total (simulated contacts plus observed LLM and Exa) against 1200¢, and missed 2 of 4 relevant accounts. Details, the v1 history and the limits: [`agentic-vs-deterministic.md`](agentic-vs-deterministic.md) and [`evals/decisions/REPORT.md`](../evals/decisions/REPORT.md).
 
 ## Risk boundaries
 
@@ -105,5 +127,7 @@ See [`agentic-vs-deterministic.md`](agentic-vs-deterministic.md) and the generat
 
 - The subject check matches names and domains; a common-word company name can still match unrelated pages.
 - A disconfirmation search is required before `evidence_backed`, but one search is not exhaustive coverage.
-- The evidence-term rule is a keyword list: a page that describes the problem in other words is not counted as support.
+- Semantic support depends on an LLM check: it is constrained (quote and pain only) and fails closed, but it is a model judgment, not a fact.
+- Clearing a competing explanation requires reading every result of the search; the prompt does not say so yet, which caused the two misses in the decision evaluation.
+- A truncated page is not flagged to the agent; in the evaluation it concluded `not_relevant` from the visible part instead of abstaining.
 - The evaluation is small, fictional and labeled by one person; it shows behavior, not business impact.

@@ -1,6 +1,6 @@
 # Opportunity Intelligence: implementation report
 
-Merged in PR #12 (`feat/opportunity-intelligence`) and PR #13 (`feat/disconfirmation-search`).
+Merged in PR #12 (`feat/opportunity-intelligence`) and PR #13 (`feat/disconfirmation-search`). This report describes agent v1; its recordings and reports are frozen in `evals/opportunity/v1/`. The next version is described in `DECISION_AWARE_GTM_EVOLUTION_REPORT.md`.
 
 ## 1. Baseline audit
 

@@ -23,7 +23,9 @@ Installed by `pip install -e ".[dev]"` into `.venv` (use `.venv/bin/gtm-lab` if 
 | `gtm-lab demo ... --research exa` | Claude researches undecided accounts with web search, under step and spend caps; paid LLM and Exa calls. Only on explicit request, after stating the caps. |
 | `gtm-lab demo ... --opportunity exa` | Before enrichment, assesses whether new qualified accounts show the offer's problem (Claude plus Exa, capped). Paid; only on explicit request. |
 | `gtm-lab opportunity <run-id> [--json]` | The run's Account Opportunity Brief. Reads persisted state only. |
-| `gtm-lab opportunity-eval [--json]` | Baseline vs agent on the labeled cases in `evals/opportunity/`, replayed from a cassette (free). `--record` and `--extend` are paid. |
+| `gtm-lab opportunity-eval --cases FILE --cassette FILE` | Baseline vs agent on labeled cases. Free when replaying a cassette recorded by the same agent version (`evals/opportunity/v1/` replays at commit `48ca5e2`). `--record` and `--extend` are paid. |
+| `gtm-lab demo ... --opportunity exa --enrichment-strategy opportunity_gated` | Contact enrichment only for evidence-backed opportunities, mapped personas only. Paid; only on explicit request. `--opportunity-scope all` adds existing CRM accounts, read-only. |
+| `gtm-lab decision-eval [--json]` | Cost and outcome of enriching everyone vs gating, on labeled cases, replayed (free). `--record`/`--extend` are paid. |
 | `gtm-lab runs [--json]` | List runs, newest first. |
 | `gtm-lab inspect <run-id>` | All persisted state of a run as JSON: `summary`, accounts, decisions, matches, costs, plan, write results, audit events. |
 | `gtm-lab eval <run-id> [--json]` | Four integrity checks. Exit code 1 on failure. |
