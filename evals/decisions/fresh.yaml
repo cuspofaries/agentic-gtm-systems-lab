@@ -1,0 +1,122 @@
+# Fresh decision cases for agent v2.1. Written and labeled on 2026-11-22 after the v2.1
+# changes and before any model run on them; not used to tune anything. Same conventions
+# as cases.yaml (query-sensitive fictional web, labels by the case author).
+
+defaults:
+  employees: 110
+  industry: B2B SaaS Software
+  hq_country: US
+  icp: qualified
+
+cases:
+  - id: f-relevant-noise-result
+    what: 'Relevant; the disconfirmation search also returns an unrelated page.'
+    name: Saffron Metrics
+    domain: saffron.example
+    signals: [{kind: sales_hiring, title: "Account Executive - Saffron Metrics", url: "https://saffron.example/jobs/ae", days_ago: 9}]
+    pages:
+      "https://saffron.example/jobs/ae": {role: support, keywords: [hiring, account, executive, sales, jobs], days_ago: 9, title: "Account Executive - Saffron Metrics", text: "Saffron Metrics is hiring five Account Executives. Our new reps take almost two quarters to close their first deal, and we are building a proper onboarding program to fix that."}
+      "https://news.example/saffron-office": {role: noise, noise: true, days_ago: 12, title: "Saffron Metrics opens a cafe for staff", text: "Saffron Metrics opened an in-house cafe for its Boston staff."}
+    label: {relevant: true, personas: [Sales Enablement, VP Sales, Head of Sales, Revenue Operations]}
+
+  - id: f-relevant-paraphrase-playbook
+    what: 'Relevant; new hires learn by shadowing, no common playbook (no listed term besides playbook).'
+    name: Bramble Systems
+    domain: bramble.example
+    signals: [{kind: sales_hiring, title: "Sales Development Representative - Bramble Systems", url: "https://bramble.example/careers/sdr", days_ago: 6}]
+    pages:
+      "https://bramble.example/careers/sdr": {role: support, keywords: [hiring, sdr, sales, careers, development], days_ago: 6, title: "Sales Development Representative - Bramble Systems", text: "Bramble Systems is tripling its SDR team this year. Right now each new SDR learns by shadowing a colleague for a few weeks, and nobody agrees on what good looks like."}
+    label: {relevant: true, personas: [Sales Enablement, Revenue Operations]}
+
+  - id: f-relevant-cro-quote
+    what: 'Relevant; a new VP Sales says reps need months before they can sell.'
+    name: Lumenridge Data
+    domain: lumenridge.example
+    signals: [{kind: new_sales_leadership, title: "Lumenridge Data hires VP of Sales", url: "https://news.example/lumenridge-vp", days_ago: 18}]
+    pages:
+      "https://news.example/lumenridge-vp": {role: support, keywords: [hires, vp, sales, leadership, appoints], days_ago: 18, title: "Lumenridge Data hires VP of Sales", text: "Lumenridge Data hired Priya Nair as VP of Sales. Nair said new reps currently need about six months before they can sell on their own, and cutting that is her first goal."}
+    label: {relevant: true, personas: [Sales Enablement, VP Sales, Head of Sales, Revenue Operations]}
+
+  - id: f-not-relevant-support-onboarding
+    what: 'Not relevant; onboarding is about customers, posted under a sales-sounding title.'
+    name: Kettle Cloud
+    domain: kettlecloud.example
+    signals: [{kind: sales_hiring, title: "Implementation Sales Engineer - Kettle Cloud", url: "https://kettlecloud.example/jobs/implementation", days_ago: 7}]
+    pages:
+      "https://kettlecloud.example/jobs/implementation": {role: contradiction, keywords: [hiring, sales, engineer, implementation, jobs], days_ago: 7, title: "Implementation Sales Engineer - Kettle Cloud", text: "Kettle Cloud is hiring an Implementation Engineer to onboard new customers after the deal closes and ramp their admins on the product. This role reports to Customer Success."}
+    label: {relevant: false}
+
+  - id: f-not-relevant-incumbent-search
+    what: 'Not relevant; the hiring page supports the pain, but a recent article says they bought a sales onboarding platform.'
+    name: Ironbark Software
+    domain: ironbark.example
+    signals: [{kind: sales_hiring, title: "Account Executive - Ironbark Software", url: "https://ironbark.example/jobs/ae", days_ago: 20}]
+    pages:
+      "https://ironbark.example/jobs/ae": {role: support, keywords: [hiring, account, executive, sales, jobs], days_ago: 20, title: "Account Executive - Ironbark Software", text: "Ironbark Software is hiring account executives; new reps currently take six months to ramp."}
+      "https://news.example/ironbark-platform": {role: contradiction, keywords: [platform, onboarding, enablement, tool, vendor, adopts, rolls, freeze, layoffs], days_ago: 4, title: "Ironbark Software adopts a sales onboarding platform", text: "Ironbark Software has adopted a dedicated sales onboarding platform for all new account executives, rolled out this month."}
+    label: {relevant: false}
+
+  - id: f-abstain-freeze-search
+    what: 'Abstain; support on the signal page, layoffs announced since.'
+    name: Cobaltline Apps
+    domain: cobaltline.example
+    signals: [{kind: sales_hiring, title: "SDR - Cobaltline Apps", url: "https://cobaltline.example/careers/sdr", days_ago: 45}]
+    pages:
+      "https://cobaltline.example/careers/sdr": {role: support, keywords: [hiring, sdr, sales, careers], days_ago: 45, title: "SDR - Cobaltline Apps", text: "Cobaltline Apps is hiring SDRs and rebuilding onboarding because ramp time is too long."}
+      "https://news.example/cobaltline-layoffs": {role: contradiction, keywords: [layoffs, freeze, cuts, hiring, paused], days_ago: 7, title: "Cobaltline Apps lays off sales staff", text: "Cobaltline Apps laid off a quarter of its sales team and paused hiring."}
+    label: {relevant: null}
+
+  - id: f-abstain-truncated
+    what: 'Abstain; the only relevant sentence is past what can be read.'
+    name: Wrenfield Labs
+    domain: wrenfield.example
+    signals: [{kind: sales_hiring, title: "Account Executive - Wrenfield Labs", url: "https://wrenfield.example/jobs/ae", days_ago: 5}]
+    pages:
+      "https://wrenfield.example/jobs/ae": {role: support, keywords: [hiring, account, executive, sales, jobs], days_ago: 5, title: "Account Executive - Wrenfield Labs", text_repeat: {text: "Wrenfield Labs perks: flexible hours, home office budget, wellness stipend, team offsites. ", times: 80}, text_after: "We are hiring because new account executives take too long to ramp and onboarding is ad hoc."}
+    label: {relevant: null}
+
+  - id: f-abstain-namesake
+    what: 'Abstain; the relevant page is about another company with the same first word.'
+    name: Halcyon Payments
+    domain: halcyonpay.example
+    signals: [{kind: sales_hiring, title: "Halcyon Hotels is hiring sales reps", url: "https://jobs.example/halcyon-hotels", days_ago: 8}]
+    pages:
+      "https://jobs.example/halcyon-hotels": {role: noise, keywords: [hiring, sales, jobs], days_ago: 8, title: "Halcyon Hotels is hiring sales reps", text: "Halcyon Hotels is hiring group sales reps and rebuilding onboarding to cut ramp time."}
+    label: {relevant: null}
+
+  - id: f-abstain-generic-hiring
+    what: 'Abstain; growth and hiring, nothing about how reps are onboarded.'
+    name: Tidepool Analytics
+    domain: tidepool.example
+    signals: [{kind: sales_hiring, title: "Sales roles - Tidepool Analytics", url: "https://tidepool.example/careers", days_ago: 10}]
+    pages:
+      "https://tidepool.example/careers": {role: noise, keywords: [hiring, sales, careers, roles], days_ago: 10, title: "Sales roles - Tidepool Analytics", text: "Tidepool Analytics is growing fast and hiring account executives across three regions. Join a winning team."}
+    label: {relevant: null}
+
+  - id: f-not-relevant-stable-team
+    what: 'Not relevant; a backfill, team stable, onboarding says it works well.'
+    name: Marlowe CRM
+    domain: marlowe.example
+    signals: [{kind: sales_hiring, title: "Account Executive (backfill) - Marlowe CRM", url: "https://marlowe.example/jobs/ae", days_ago: 6}]
+    pages:
+      "https://marlowe.example/jobs/ae": {role: contradiction, keywords: [hiring, account, executive, sales, jobs, backfill], days_ago: 6, title: "Account Executive (backfill) - Marlowe CRM", text: "Marlowe CRM is replacing one Account Executive who moved to another team. The sales team size is unchanged and our onboarding program gets new reps to quota within six weeks."}
+    label: {relevant: false}
+
+  - id: f-relevant-expansion-sales
+    what: 'Relevant; an office opening with a stated plan to onboard a new sales team.'
+    name: Northpine Software
+    domain: northpine.example
+    signals: [{kind: revenue_expansion, title: "Northpine Software opens Austin sales office", url: "https://news.example/northpine-austin", days_ago: 16}]
+    pages:
+      "https://news.example/northpine-austin": {role: support, keywords: [office, opens, expansion, austin, sales], days_ago: 16, title: "Northpine Software opens Austin sales office", text: "Northpine Software is opening an Austin sales office and will hire twenty reps there. The company said getting a whole new team productive quickly, without the founders training each rep, is the hard part."}
+    label: {relevant: true, personas: [Sales Enablement, VP Sales, Head of Sales, Revenue Operations]}
+
+  - id: f-abstain-search-outage
+    what: 'Abstain; the signal page supports the pain, every search fails.'
+    name: Greyfield Systems
+    domain: greyfield.example
+    search_fails: true
+    signals: [{kind: sales_hiring, title: "SDR - Greyfield Systems", url: "https://greyfield.example/jobs/sdr", days_ago: 7}]
+    pages:
+      "https://greyfield.example/jobs/sdr": {role: support, keywords: [hiring, sdr, sales, jobs], days_ago: 7, title: "SDR - Greyfield Systems", text: "Greyfield Systems is hiring SDRs; new reps take too long to ramp and we want a real onboarding program."}
+    label: {relevant: null}
