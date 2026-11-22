@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ICPBand(BaseModel):
@@ -102,6 +102,56 @@ class ContactSettings(BaseModel):
     on_unverified_email: Literal["keep", "drop_email"] = "keep"
 
 
+class PainPoint(BaseModel):
+    """A problem the offer solves, and what observable events could support or weaken it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    description: str
+    # Words a page must contain for an event to count as support for this pain, e.g.
+    # "onboarding", "ramp". Used by the deterministic checks and shown to the agent.
+    evidence_terms: list[str] = Field(default_factory=list)
+    supporting_events: list[str] = Field(default_factory=list)  # signal kinds or plain descriptions
+    weakening_events: list[str] = Field(default_factory=list)
+
+
+class BuyingRole(BaseModel):
+    """A role in a buying group for one pain. A hypothesis about who might care, never a person."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    role: Literal["problem_owner", "sponsor", "stakeholder", "user"]
+    title_hints: list[str] = Field(default_factory=list)
+    why: str
+    pains: list[str] = Field(default_factory=list)  # PainPoint ids
+
+
+class Offer(BaseModel):
+    """A product the GTM team sells, described by the problems it solves."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    target_problem: str
+    value_proposition: str = ""
+    pains: list[str] = Field(default_factory=list)  # PainPoint ids
+    exclusions: list[str] = Field(default_factory=list)  # e.g. "already uses a competing onboarding tool"
+    evidence_expectations: list[str] = Field(default_factory=list)
+
+
+class SignalInterpretation(BaseModel):
+    """What a signal kind could suggest, and the misleading explanations to test first."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    signal_kind: str
+    may_suggest: list[str] = Field(default_factory=list)  # PainPoint ids
+    misleading_alternatives: list[str] = Field(default_factory=list)
+
+
 class ResearchPolicy(BaseModel):
     """Bounds of web research (`--research`, `--opportunity`)."""
 
@@ -110,6 +160,9 @@ class ResearchPolicy(BaseModel):
     # Company facts (headcount, location) stay true longer than events: research about them
     # searches this far back. Events use signal_policy.max_signal_age_days.
     company_facts_max_age_days: int = Field(default=730, ge=1)
+    # Opportunity investigation (`--opportunity exa`): accounts per run and tool calls each.
+    opportunity_max_accounts: int = Field(default=3, ge=0)
+    opportunity_max_steps: int = Field(default=8, ge=2)
 
 
 class SignalSettings(BaseModel):
@@ -139,3 +192,18 @@ class GTMContext(BaseModel):
     contacts: ContactSettings = Field(default_factory=ContactSettings)
     signals: SignalSettings = Field(default_factory=SignalSettings)
     research_policy: ResearchPolicy = Field(default_factory=ResearchPolicy)
+    # GTM Brain (optional): what is sold, which problems it solves, who might care.
+    offers: list[Offer] = Field(default_factory=list)
+    pain_points: list[PainPoint] = Field(default_factory=list)
+    buying_roles: list[BuyingRole] = Field(default_factory=list)
+    signal_interpretation: list[SignalInterpretation] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _brain_references(self):
+        pains = {p.id for p in self.pain_points}
+        bad = [f"offer {o.id}: {x}" for o in self.offers for x in o.pains if x not in pains]
+        bad += [f"role {r.id}: {x}" for r in self.buying_roles for x in r.pains if x not in pains]
+        bad += [f"signal {i.signal_kind}: {x}" for i in self.signal_interpretation for x in i.may_suggest if x not in pains]
+        if bad:
+            raise ValueError(f"unknown pain point id(s): {bad}")
+        return self

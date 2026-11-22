@@ -249,3 +249,82 @@ class WriteOperationResult(BaseModel):
     error: str | None = None
     attempt: int = 1
     at: datetime = Field(default_factory=_utcnow)
+
+
+# --- Opportunity intelligence ---------------------------------------------------------
+# Separate from ICP qualification: an account can fit the ICP with no sign of the problem
+# the offer solves, and that is not a negative fact about the account.
+
+
+class Observation(BaseModel):
+    """An event a page reports, checked by code. A quote proves what a page says, not that it is true."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    obs_id: str
+    event: str  # e.g. "sales_hiring", or a short label
+    statement: str  # the fact asserted, in the agent's words
+    subject: str  # the company the page says it is about
+    url: str
+    quote: str
+    page_ref: str | None = None
+    published_at: datetime | None = None  # page publication date (from the search)
+    event_date_stated: str | None = None  # only if the quote itself states when it happened
+    retrieved_at: datetime = Field(default_factory=_utcnow)
+    check: Literal["quote_found", "page_not_read", "quote_not_found", "subject_mismatch", "date_not_in_quote"]
+    stance: Literal["supports", "contradicts", "irrelevant", "unresolved"]
+    pain_id: str | None = None  # the pain point the stance is about
+
+
+class PainHypothesis(BaseModel):
+    """Why an event could matter for the offer. An inference, labeled as one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pain_id: str
+    statement: str
+    status: Literal["supported", "contradicted", "mixed", "untested"]
+    supporting: list[str] = Field(default_factory=list)  # obs ids that passed their checks
+    contradicting: list[str] = Field(default_factory=list)
+
+
+class RoleHypothesis(BaseModel):
+    """Who might care, from the GTM Brain. Never a person, a name or contact details."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role_id: str
+    role: str
+    title_hints: list[str]
+    reason: str
+    uncertainty: str = "Hypothetical role from the GTM Brain; no person identified or verified."
+
+
+class OpportunityAssessment(BaseModel):
+    """Is there evidence that this account has the problem this offer solves, right now?"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str
+    offer_id: str
+    icp_decision: Literal["qualified", "not_qualified", "insufficient_evidence"]  # linked, never changed
+    icp_decided_by: str
+    assessed_by: Literal["agent", "baseline"]
+    observed_events: list[Observation] = Field(default_factory=list)
+    pain_hypotheses: list[PainHypothesis] = Field(default_factory=list)
+    alternative_explanations: list[str] = Field(default_factory=list)  # agent's text, labeled as such
+    unknowns: list[str] = Field(default_factory=list)
+    buying_roles: list[RoleHypothesis] = Field(default_factory=list)
+    assessment_status: Literal["evidence_backed", "hypothesis_only", "needs_research", "not_relevant",
+                               "insufficient_evidence"]
+    recommended_next_action: Literal["research_more", "review", "consider_persona_enrichment", "defer",
+                                     "no_relevant_evidence"]
+    next_action_reason: str
+    coverage: Literal["not_attempted", "checked_no_result", "found", "incomplete", "failed"]
+    agent_view: dict = Field(default_factory=dict)  # what the agent itself proposed, for comparison
+    unsupported_claims: int = 0  # observations dropped by the checks
+    llm_calls: int = 0
+    llm_cents: int = 0
+    exa_millidollars: int = 0
+    trace: list[dict] = Field(default_factory=list)
+    assessed_at: datetime = Field(default_factory=_utcnow)

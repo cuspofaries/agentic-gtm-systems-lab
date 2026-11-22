@@ -21,6 +21,7 @@ import secrets
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from ..agents.opportunity import OpportunityInvestigator, baseline_assessment
 from ..agents.qualifier import DeterministicQualifier, Qualifier
 from ..context import GTMContext
 from ..crm.base import CRMAdapter, CRMError
@@ -139,9 +140,13 @@ class AccountDiscoveryWorkflow:
         qualifier: Qualifier | None = None,
         fallback_qualifier: Qualifier | None = None,
         signals: SignalProvider | None = None,
+        opportunity: OpportunityInvestigator | None = None,
+        opportunity_include_undecided: bool = False,
     ):
         self.context = context
         self.signals = signals
+        self.opportunity = opportunity
+        self.opportunity_include_undecided = opportunity_include_undecided
         self.discovery = discovery
         self.enrichment = enrichment
         self.crm = crm
@@ -185,6 +190,34 @@ class AccountDiscoveryWorkflow:
                 "failures": r.failures,
             })
         return spent
+
+    def _assess_opportunities(self, run_id, accounts, decisions, matches_by_id) -> None:
+        by_id = {d.account_id: d for d in decisions}
+
+        def eligible(a: Account) -> bool:
+            d = by_id[a.account_id].decision
+            if d == "qualified":  # qualified accounts are reconciled: only those new to the CRM
+                m = matches_by_id.get(a.account_id)
+                return m is not None and m.match_type == "none"
+            # Undecided accounts only on explicit opt-in; the assessment never promotes them.
+            return d == "insufficient_evidence" and self.opportunity_include_undecided
+
+        candidates = [a for a in accounts if eligible(a)]
+        cap = self.context.research_policy.opportunity_max_accounts
+        out = []
+        for acc in candidates:
+            decision = by_id[acc.account_id]
+            out.append(baseline_assessment(acc, decision, self.context))
+            if len([a for a in out if a.assessed_by == "agent"]) >= cap:
+                self.recorder.record(run_id, "opportunity.cap_reached", {"account_id": acc.account_id, "cap": cap})
+                continue
+            a = self.opportunity.assess(acc, decision, self.context)
+            out.append(a)
+            self.recorder.record(run_id, "opportunity.assessed", {
+                "account_id": acc.account_id, "status": a.assessment_status, "next": a.recommended_next_action,
+                "coverage": a.coverage, "unsupported_claims": a.unsupported_claims,
+                "llm_cents": a.llm_cents, "exa_millidollars": a.exa_millidollars, "steps": a.trace})
+        self.store.save_assessments(run_id, out)
 
     def plan(self, *, limit: int = 50, run_id: str | None = None) -> WritePlan:
         # The timestamp alone is per second: two plans in the same second would share it.
@@ -275,6 +308,11 @@ class AccountDiscoveryWorkflow:
             },
         )
         self.store.save_matches(run_id, list(matches_by_id.values()))
+
+        # 4b. Opportunity assessment (optional): before any paid contact enrichment, on new
+        # accounts only. It never changes the ICP decision.
+        if self.opportunity is not None:
+            self._assess_opportunities(run_id, disc.accounts, decisions, matches_by_id)
 
         # 5. Enrichment + 6. Policy evaluation → WritePlan entries
         budget = EnrichmentBudget(cap_cents=self.context.policy.enrichment_budget_cents)

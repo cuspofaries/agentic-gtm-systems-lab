@@ -19,6 +19,7 @@ from pathlib import Path
 from ..models import (
     Account,
     EnrichmentCost,
+    OpportunityAssessment,
     QualificationDecision,
     ReconciliationMatch,
     WriteOperationResult,
@@ -37,6 +38,8 @@ class RunStore:
     CREATE TABLE IF NOT EXISTS cost (run_id TEXT, account_id TEXT, json TEXT,
         PRIMARY KEY (run_id, account_id));
     CREATE TABLE IF NOT EXISTS plan (run_id TEXT PRIMARY KEY, json TEXT);
+    CREATE TABLE IF NOT EXISTS assessment (run_id TEXT, account_id TEXT, assessed_by TEXT, json TEXT,
+        PRIMARY KEY (run_id, account_id, assessed_by));
     CREATE TABLE IF NOT EXISTS write_result (
         id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, account_id TEXT, json TEXT
     );
@@ -102,6 +105,19 @@ class RunStore:
                 [(run_id, k.account_id, k.model_dump_json()) for k in costs],
             )
 
+    def save_assessments(self, run_id: str, items: list[OpportunityAssessment]) -> None:
+        with self._conn() as c:
+            c.executemany(
+                "INSERT OR REPLACE INTO assessment (run_id, account_id, assessed_by, json) VALUES (?, ?, ?, ?)",
+                [(run_id, a.account_id, a.assessed_by, a.model_dump_json()) for a in items],
+            )
+
+    def load_assessments(self, run_id: str) -> list[OpportunityAssessment]:
+        with self._conn() as c:
+            rows = c.execute("SELECT json FROM assessment WHERE run_id = ? ORDER BY account_id, assessed_by",
+                             (run_id,)).fetchall()
+        return [OpportunityAssessment.model_validate_json(r[0]) for r in rows]
+
     def save_plan(self, plan: WritePlan) -> None:
         with self._conn() as c:
             c.execute(
@@ -145,4 +161,5 @@ class RunStore:
             "write_results": [
                 json.loads(r.model_dump_json()) for r in self.load_write_results(run_id)
             ],
+            "opportunity_assessments": [json.loads(a.model_dump_json()) for a in self.load_assessments(run_id)],
         }

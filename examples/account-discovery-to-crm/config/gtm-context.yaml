@@ -52,3 +52,61 @@ crm:
   # The fixture contacts are fictional people, so "Not applicable" is the truthful value.
   # For real contacts this is a compliance decision: set your own value.
   hubspot_contact_legal_basis: "Not applicable"
+
+# GTM Brain: what we sell, which problems it solves, who might care. Used by
+# `--opportunity` (docs/opportunity-intelligence.md); optional everywhere else.
+offers:
+  - id: sales-onboarding
+    name: Sales onboarding platform
+    target_problem: New sales hires take too long to reach quota because onboarding is ad hoc.
+    value_proposition: Structured onboarding and coaching paths that shorten ramp time.
+    pains: [slow-ramp, onboarding-at-scale]
+    exclusions:
+      - The company states it already uses a dedicated sales onboarding or enablement platform.
+    evidence_expectations:
+      - A dated page from or about the company that ties sales hiring or growth to onboarding, ramp time, training or coaching.
+
+pain_points:
+  - id: slow-ramp
+    description: New sales reps take too long to become productive.
+    evidence_terms: [ramp, ramp time, time to productivity, quota attainment, onboarding]
+    supporting_events: [sales_hiring, new_sales_leadership]
+    weakening_events: [hiring freeze, layoffs in sales]
+  - id: onboarding-at-scale
+    description: Onboarding many sales hires at once without a repeatable program.
+    evidence_terms: [onboarding, training program, enablement, coaching, playbook, standardize]
+    supporting_events: [sales_hiring, revenue_expansion]
+    weakening_events: [evergreen posting, role outside sales]
+
+buying_roles:
+  - id: enablement-owner
+    role: problem_owner
+    title_hints: [Sales Enablement Manager, Head of Sales Enablement]
+    why: Owns onboarding content and ramp programs.
+    pains: [slow-ramp, onboarding-at-scale]
+  - id: sales-sponsor
+    role: sponsor
+    title_hints: [VP Sales, Head of Sales]
+    why: Carries the quota that slow ramp puts at risk.
+    pains: [slow-ramp]
+  - id: revops-stakeholder
+    role: stakeholder
+    title_hints: [Revenue Operations]
+    why: Integrates the tool with CRM and reports ramp metrics.
+    pains: [slow-ramp, onboarding-at-scale]
+
+signal_interpretation:
+  - signal_kind: sales_hiring
+    may_suggest: [onboarding-at-scale, slow-ramp]
+    misleading_alternatives:
+      - The posting is evergreen or old (reposted, no date in the text).
+      - The role is not in sales (support, success, marketing).
+      - The posting belongs to another company with a similar name.
+  - signal_kind: new_sales_leadership
+    may_suggest: [slow-ramp]
+    misleading_alternatives:
+      - The announcement is old; the page date is not the event date.
+  - signal_kind: revenue_expansion
+    may_suggest: [onboarding-at-scale]
+    misleading_alternatives:
+      - Funding or expansion with no stated plan to grow the sales team.
