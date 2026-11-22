@@ -12,7 +12,6 @@ from gtm_lab.evaluations.opportunity_eval import LLMCassette, _naive, metrics, r
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / "evals" / "opportunity" / "cases.yaml"
-CASSETTE = ROOT / "evals" / "opportunity" / "cassette.json"
 
 
 @pytest.fixture
