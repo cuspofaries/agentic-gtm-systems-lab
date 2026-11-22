@@ -12,15 +12,34 @@ An executable learning lab and open-source reference architecture for GTM engine
 
 *The offline demo end to end: plan, approval, sync, a second sync that is a no-op, and the integrity checks. Real command output; only the typing is simulated.*
 
+**Start here:** [Learning path](#start-learning-gtm-engineering) · [Quick start](#quick-start) · [How a run works](#how-does-a-run-work) · [Limitations](#what-are-the-limitations) · [All docs](#where-to-go-next)
+
 ---
 
-## Learn, build, test
+## Start learning GTM engineering
 
-- **Learn.** Inspect a running system layer by layer and reproduce failure cases with no API key: [`docs/learning-path.md`](docs/learning-path.md) has one hands-on module per layer.
-- **Build.** Reuse the pieces in your own stack: provider and CRM contracts, budgets and policies, the bounded research loop, opportunity assessment, the approval gate, idempotent HubSpot writes ([`docs/integration-guide.md`](docs/integration-guide.md)).
-- **Test.** Compare a deterministic baseline with the agent on labeled cases, inspect the evidence, replay recorded model answers for free, count errors and estimate costs ([`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md)).
+**New here? Start with the [learning path](docs/learning-path.md).** Six hands-on modules take one account-to-CRM workflow apart, one layer at a time. Everything runs offline: no API key, no Claude subscription, no live CRM. The agent's behavior is studied by replaying answers Claude gave once, recorded in the repository.
 
-## What can I run in five minutes?
+**Who it is for.** Developers learning GTM engineering who want to run a real workflow, break it on purpose and see how failures propagate. GTM engineers who want reusable pieces (budget enforcer, CRM reconciliation, policy checks, review gate) for an existing Clay, n8n or Python stack, with no platform to adopt.
+
+| Module | What you practice |
+|---|---|
+| 1. Data Foundation | Company identity, provenance and known unknowns on every record |
+| 2. Data Layer | Providers, CRM reconciliation, duplicates and source failures |
+| 3. GTM Brain | The ICP and commercial context as one reviewable YAML file |
+| 4. Agentic Intelligence | What the agent chooses and what the code checks, on recorded runs |
+| 5. Activation & Governance | What gets bought, approved and written, under budgets |
+| 6. Evaluation & GTM CI/CD | Baseline vs agent on labeled cases, replayed in CI to catch regressions |
+
+Each module follows the same loop:
+
+- **Learn.** Read the concept, run the commands, inspect the persisted run.
+- **Build.** Change the configuration or a fixture, or reuse a component in your own stack: provider and CRM contracts, budgets and policies, the bounded research loop, the approval gate, idempotent HubSpot writes ([`docs/integration-guide.md`](docs/integration-guide.md)).
+- **Test.** Check the outcome with the test suite, and compare a deterministic baseline with the agent on labeled cases, replayed for free ([`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md)).
+
+To begin, install the package (Option B below) and open [`docs/learning-path.md`](docs/learning-path.md), or let Claude Code guide you (Option A).
+
+## Quick start
 
 Two entry points on the same code.
 
@@ -94,7 +113,7 @@ Limits, stated up front: real providers and model calls are opt-in and paid; the
 
 Most "AI GTM agent" repos stop at **discovery** (find companies) or **analysis** (why we lost). This one covers **the write path** - the slice of the workflow where an agent actually proposes changes to your CRM, and where things go wrong and cost money.
 
-Specifically: an end-to-end **Account Discovery → ICP Qualification → CRM Reconciliation → Enrichment (budget-enforced) → Human Approval → Idempotent Sync** pipeline, in a Python repo you can clone and run offline in five minutes.
+Specifically: an end-to-end **Account Discovery → ICP Qualification → CRM Reconciliation → optional Opportunity Assessment → Enrichment (budget-enforced) → Human Approval → Idempotent Sync** pipeline, in a Python repo you can clone and run offline in five minutes.
 
 The four guardrails this repo exists to demonstrate:
 
@@ -103,59 +122,36 @@ The four guardrails this repo exists to demonstrate:
 3. **Mandatory human approval** between agent proposal and CRM write.
 4. **Idempotent, resumable sync** - retrying a run never creates duplicate records, and a plan whose CRM state changed after approval is not applied blindly.
 
-## Who is it for?
+## How does a run work?
 
-**Developers learning GTM Engineering** - run a real workflow locally, break it on purpose, watch how failures propagate through a safe pipeline.
-
-**Experienced GTM Engineers** - extract reusable components (the budget enforcer, the reconciliation layer, the policy evaluator, the write-plan review artifact) and drop them into your existing Clay / n8n / Python stack. No platform adoption required.
-
-## What happens during the example workflow?
+Plain steps are deterministic code and run offline. `[AI]` marks an optional Claude step: off by default, paid and capped when on. `◆` marks a control enforced by code. Step by step, with the code behind each one: [`docs/architecture.md`](docs/architecture.md).
 
 ```
-          +--------------------+
-          |  GTM Context       |   YAML - ICP, personas, signals, exclusions, policies
-          |  (gtm-context.yaml)|
-          +--------------------+
-                    |
-                    v
-          +--------------------+   DiscoveryProvider → ProviderResult
-          |  1. Discovery       |   (accounts, source_failures, search_coverage)
-          +--------------------+
-                    |
-                    v
-          +--------------------+   DeterministicQualifier: rules-based decision
-          |  2. Qualification   |   with explicit confidence + evidence + missing
-          +--------------------+
-                    |
-                    v
-          +--------------------+   Domain-canonicalized match against CRM state
-          |  3. Reconciliation  |   + in-batch dedup; ambiguous cases flagged
-          +--------------------+
-                    |
-                    v
-          +--------------------+   EnrichmentBudget enforces a cents cap
-          |  4. Enrichment      |   BEFORE any provider call is made
-          +--------------------+
-                    |
-                    v
-          +--------------------+   Policies catch: weak evidence, unsupported
-          |  5. Policy evaluation|  agent claims, required-email missing, etc.
-          +--------------------+
-                    |
-                    v
-          +--------------------+   Markdown review artifact; nothing writes
-          |  6. Human approval  |   until approve or reject is called
-          +--------------------+
-                    |
-                    v
-          +--------------------+   Revalidate against current CRM state,
-          |  7. Sync            |   then idempotent writes (external_ref keys)
-          +--------------------+   with retry on retriable CRMError
-                    |
-                    v
-          +--------------------+   SQLite run store + JSONL event log
-          |  8. Audit trail     |   gtm-lab eval runs 4 integrity checks
-          +--------------------+
+GTM Brain: gtm-context.yaml (ICP, personas, offers, pains, signal and action policies),
+read by every step
+
+gtm-lab demo                  plans only, writes nothing to the CRM
+  1. Discovery                fixtures | People Data Labs (opt-in)
+  2. Signal search            Exa (opt-in, --signals exa)        ◆ signal budget
+  3. ICP qualification        deterministic rules decide
+       undecided accounts     [AI] research missing facts (--research exa)
+                              ◆ quotes checked, claims reconciled, rules re-decide
+                              (--agentic: an opinion, recorded and never applied)
+  4. CRM reconciliation       canonical domain match + in-batch dedup;
+                              accounts already in the CRM are never enriched
+  5. Opportunity assessment   [AI] investigation (--opportunity exa), next to a no-AI baseline
+                              ◆ quotes, semantic check and disconfirmation audited
+  6. Action policy            all_qualified (default) | opportunity_gated
+                              ◆ fail closed: no checked evidence, no paid enrichment
+  7. Enrichment               fixtures | PDL, FullEnrich, ZeroBounce (opt-in)
+                              ◆ budget checked before every paid call
+  8. Policy checks            ◆ hard checks on every proposed write
+  9. Write plan PROPOSED      review artifact (+ opportunity brief)
+
+gtm-lab approve               ◆ a person approves, explicitly
+gtm-lab sync                  ◆ revalidation against the CRM, idempotent writes
+gtm-lab eval | inspect        audit trail (runs.sqlite, events.jsonl), 4 integrity checks
+gtm-lab decision-eval         baseline vs agent on labeled cases, replayed for free
 ```
 
 Example output from `gtm-lab demo --offline`:
