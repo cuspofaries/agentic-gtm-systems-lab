@@ -185,15 +185,17 @@ def test_research_loop_is_recorded_and_replayed(case, fake_network, monkeypatch,
     page = "https://news.example/headcount"
     exa = FakeExa(results=[{"url": page, "title": "Headcount", "publishedDate": "2026-11-01T00:00:00.000Z",
                             "highlights": ["about 90 employees"]}],
-                  page_text="The company has about 90 employees in the US.")
+                  # Names every fixture company's domain, so the subject check passes for each.
+                  page_text="alpha.example, beta.example and gamma.example: about 90 employees in the US each.")
 
     def exa_with_key(method, url, headers, body):
         return exa(method, url, {**headers, "x-api-key": "exa-key"}, body)
 
     def turns():
-        return [_resp(_use("search", 1, query="headcount")), _resp(_use("read", 2, url=page)),
-                _resp(_use("submit", 3, decision="qualified", explanation="90 employees",
-                           evidence=[{"url": page, "quote": "about 90 employees in the US"}]))]
+        return [_resp(_use("search", 1, query="headcount", purpose="company_facts")), _resp(_use("read", 2, url=page)),
+                _resp(_use("submit", 3, assessment="qualified", explanation="90 employees",
+                           claims=[{"field": "employees", "value": "about 90", "subject": "the company",
+                                    "url": page, "quote": "about 90 employees in the US"}]))]
 
     scripted = ScriptedClaude(turns() * 3)
     monkeypatch.setattr(anthropic, "Anthropic", lambda **_kw: scripted)
@@ -205,7 +207,7 @@ def test_research_loop_is_recorded_and_replayed(case, fake_network, monkeypatch,
 
     observed, _ = run_case(case, "record", keys, tmp_path / "s1", no_wait=True)
     assert set(observed["research_decisions"].values()) == {"qualified"}
-    assert set(observed["research_evidence_kept"].values()) == {1}
+    assert set(observed["research_claims_checked"].values()) == {1}
     assert observed["contacts_proposed"] == 0 and observed["research_llm_calls"] == 9
     text = (case / "cassette.json").read_text()
     assert "sk-test-anthropic" not in text and "exa-test-key" not in text

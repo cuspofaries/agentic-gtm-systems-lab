@@ -76,6 +76,41 @@ class Account(BaseModel):
         return canonicalize_domain(v)
 
 
+class SourcedClaim(BaseModel):
+    """A fact a web page states, as extracted by the research loop, with its checks.
+
+    A claim is not a fact about the account: it says what a page says. Whether it can
+    fill a missing field is decided later, from all claims on that field (FactResolution).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    claim_id: str
+    field: str  # account field the claim is about, e.g. "employees"
+    value: str  # as the page states it, e.g. "between 500 and 1,000"
+    subject: str  # the company the page says it is about
+    url: str
+    quote: str
+    page_ref: str | None = None  # id of the page read in this run, if it was read
+    published_at: datetime | None = None  # page publication date, when the search gave one
+    retrieved_at: datetime = Field(default_factory=_utcnow)
+    # quote_found: the quote is in the text of a page read in this run and the page names
+    # the company. Anything else cannot resolve a field.
+    check: Literal["quote_found", "page_not_read", "quote_not_found", "subject_mismatch", "unparsable"]
+
+
+class FactResolution(BaseModel):
+    """What research established about one field the provider left missing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    status: Literal["filled", "contradicted", "unresolved", "not_checked"]
+    value: str | None = None  # the value the rules were re-run with, when filled
+    claim_ids: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
 class QualificationDecision(BaseModel):
     """The output of the ICP qualification stage."""
 
@@ -89,6 +124,10 @@ class QualificationDecision(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     decided_by: Literal["rules", "llm", "hybrid"] = "rules"
     decided_at: datetime = Field(default_factory=_utcnow)
+    # Research only: the claims pages made, and what they established per missing field.
+    # `hybrid` = the rules re-run on the provider data plus the fields research filled.
+    claims: list[SourcedClaim] = Field(default_factory=list)
+    resolutions: list[FactResolution] = Field(default_factory=list)
 
 
 class CRMAccount(BaseModel):

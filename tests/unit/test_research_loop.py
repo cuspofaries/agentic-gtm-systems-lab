@@ -70,27 +70,120 @@ def _agent(turns, exa=None, **kw):
     return agent, client
 
 
-GOOD = [
-    _resp(_use("search", 1, query="Acme Analytics number of employees")),
-    _resp(_use("read", 2, url=PAGE_URL)),
-    _resp(_use("submit", 3, decision="qualified", explanation="140 employees, in the band.",
-               evidence=[{"url": PAGE_URL, "quote": "now employs 140 people"}])),
-]
+def _claim(quote="now employs 140 people", value="140", url=PAGE_URL, field="employees"):
+    return {"field": field, "value": value, "subject": "Acme Analytics", "url": url, "quote": quote}
+
+
+def _submit(i, *claims, assessment="qualified"):
+    return _resp(_use("submit", i, assessment=assessment, explanation="x", claims=list(claims)))
+
+
+SEARCH = _resp(_use("search", 1, query="Acme Analytics number of employees", purpose="company_facts"))
+READ = _resp(_use("read", 2, url=PAGE_URL))
+GOOD = [SEARCH, READ, _submit(3, _claim())]
 
 
 @pytest.mark.unit
-def test_search_read_submit_with_a_quote_found_in_the_page(context):
+def test_claims_checked_reconciled_then_the_rules_decide(context):
     exa = FakeExa()
     agent, client = _agent(GOOD, exa)
     d = agent.qualify(_account(), context)
-    assert d.decision == "qualified" and d.decided_by == "llm"
-    assert d.evidence == [f'{PAGE_URL}: "now employs 140 people" (quote found in the page read)']
+    assert d.decision == "qualified" and d.decided_by == "hybrid"
+    assert [c.check for c in d.claims] == ["quote_found"] and d.claims[0].page_ref == "page-1"
+    assert [(r.field, r.status, r.value) for r in d.resolutions] == [("employees", "filled", "140")]
+    assert any("employees 140" in e for e in d.evidence)  # the rules' own evidence, on the filled copy
     assert [s.get("tool") for s in agent.last_trace] == ["search", "read", "submit"]
     assert agent.exa_spent_millidollars == 5 and agent.llm_calls == 3
-    # Searches stay inside the freshness window; page text reaches Claude as tagged data.
-    assert exa.calls[0][1]["startPublishedDate"] == "2026-08-24T00:00:00.000Z"
+    # Company facts search about two years back, not the 90-day signal window.
+    assert exa.calls[0][1]["startPublishedDate"] == "2024-11-22T00:00:00.000Z"
     tool_result = client.requests[2]["messages"][-1]["content"][0]["content"]
-    assert tool_result.startswith("<page url=") and PAGE_TEXT in tool_result
+    assert tool_result.startswith('<page id="page-1"') and PAGE_TEXT in tool_result
+
+
+@pytest.mark.unit
+def test_recent_events_use_the_signal_window(context):
+    exa = FakeExa()
+    turns = [_resp(_use("search", 1, query="x", purpose="recent_events")), _submit(2, assessment="insufficient_evidence")]
+    agent, _ = _agent(turns, exa)
+    agent.qualify(_account(), context)
+    assert exa.calls[0][1]["startPublishedDate"] == "2026-08-24T00:00:00.000Z"
+
+
+@pytest.mark.unit
+def test_the_model_does_not_decide(context):
+    # Claude says "qualified" but its only claim puts the company outside the band.
+    turns = [SEARCH, READ, _submit(3, _claim(quote="now employs 140 people", value="1400"))]
+    agent, _ = _agent(turns)
+    d = agent.qualify(_account(), context)
+    assert d.decision == "not_qualified"
+    assert agent.last_trace[-1]["submitted"] == "qualified"
+
+
+@pytest.mark.unit
+def test_disagreeing_sources_stay_open(context):
+    page2 = "https://other.example/acme"
+    exa = FakeExa(results=[
+        {"url": PAGE_URL, "title": "Acme Analytics grows", "publishedDate": "2026-11-01T00:00:00.000Z", "highlights": []},
+        {"url": page2, "title": "Acme Analytics profile", "publishedDate": "2026-10-01T00:00:00.000Z", "highlights": []}],
+        page_text="Acme Analytics now employs 140 people. Another source: Acme Analytics has 900 employees.")
+    turns = [SEARCH, READ, _resp(_use("read", 3, url=page2)),
+             _submit(4, _claim(), _claim(quote="Acme Analytics has 900 employees", value="900", url=page2))]
+    agent, _ = _agent(turns, exa)
+    d = agent.qualify(_account(), context)
+    assert d.decision == "insufficient_evidence"
+    assert d.resolutions[0].status == "contradicted" and "disagree" in d.resolutions[0].note
+
+
+@pytest.mark.unit
+def test_provider_data_is_never_overwritten(context):
+    acc = _account()
+    acc.industry = "B2B SaaS Software"  # provider value; only employees is missing
+    turns = [SEARCH, READ, _submit(3, _claim(), _claim(field="industry", value="Consulting"))]
+    agent, _ = _agent(turns)
+    d = agent.qualify(acc, context)
+    assert [r.field for r in d.resolutions] == ["employees"]
+    assert d.decision == "qualified"
+
+
+@pytest.mark.unit
+def test_a_quote_not_in_the_page_does_not_count(context):
+    turns = [SEARCH, READ, _submit(3, _claim(quote="employs 180 people", value="180"))]
+    agent, _ = _agent(turns, max_steps=3)  # last step: no resubmission
+    d = agent.qualify(_account(), context)
+    assert d.decision == "insufficient_evidence"
+    assert d.claims[0].check == "quote_not_found" and d.resolutions[0].status == "unresolved"
+
+
+@pytest.mark.unit
+def test_a_page_about_another_company_does_not_count(context):
+    exa = FakeExa(results=[{"url": PAGE_URL, "title": "Acme Holdings results", "publishedDate": None, "highlights": []}],
+                  page_text="Acme Holdings now employs 140 people.")
+    agent, _ = _agent([SEARCH, READ, _submit(3, _claim())], exa, max_steps=3)
+    d = agent.qualify(_account(), context)
+    assert d.claims[0].check == "subject_mismatch" and d.decision == "insufficient_evidence"
+
+
+EXCERPT_SUBMIT = _submit(2, _claim())
+
+
+@pytest.mark.unit
+def test_evidence_from_a_page_never_read_does_not_count(context):
+    agent, _ = _agent([SEARCH, EXCERPT_SUBMIT], max_steps=3)  # no room left to read and resubmit
+    d = agent.qualify(_account(), context)  # the excerpt says it, but the page was not read
+    assert d.decision == "insufficient_evidence" and d.claims[0].check == "page_not_read"
+    assert agent.last_trace[-1]["submitted"] == "qualified"
+
+
+@pytest.mark.unit
+def test_unverified_submit_is_sent_back_once_to_read_the_page(context):
+    # Measured on the real API: Claude quoted search excerpts without reading the pages.
+    turns = [SEARCH, EXCERPT_SUBMIT, _resp(_use("read", 3, url=PAGE_URL)), _submit(4, _claim())]
+    agent, client = _agent(turns)
+    d = agent.qualify(_account(), context)
+    assert d.decision == "qualified" and d.resolutions[0].status == "filled"
+    assert [s.get("outcome") for s in agent.last_trace][1] == "sent_back"
+    sent_back = client.requests[2]["messages"][-1]["content"][0]
+    assert sent_back["is_error"] and "read" in sent_back["content"]
 
 
 @pytest.mark.unit
@@ -103,46 +196,9 @@ def test_tools_are_strict_and_not_forced(context):
 
 
 @pytest.mark.unit
-def test_a_quote_not_in_the_page_does_not_count(context):
-    turns = [*GOOD[:2], _resp(_use("submit", 3, decision="qualified", explanation="x",
-                                   evidence=[{"url": PAGE_URL, "quote": "employs 180 people"}]))]
-    agent, _ = _agent(turns, max_steps=3)  # last step: no resubmission
-    d = agent.qualify(_account(), context)
-    assert d.decision == "insufficient_evidence"
-    assert "research_no_verified_evidence" in d.missing and d.evidence == []
-
-
-EXCERPT_SUBMIT = _resp(_use("submit", 2, decision="qualified", explanation="x",
-                            evidence=[{"url": PAGE_URL, "quote": "now employs 140 people"}]))
-
-
-@pytest.mark.unit
-def test_evidence_from_a_page_never_read_does_not_count(context):
-    agent, _ = _agent([GOOD[0], EXCERPT_SUBMIT], max_steps=3)  # no room left to read and resubmit
-    d = agent.qualify(_account(), context)  # the excerpt says it, but the page was not read
-    assert d.decision == "insufficient_evidence"
-    assert agent.last_trace[-1]["submitted"] == "qualified"
-
-
-@pytest.mark.unit
-def test_unverified_submit_is_sent_back_once_to_read_the_page(context):
-    # Measured on the real API: Claude quoted search excerpts without reading the pages.
-    turns = [GOOD[0], EXCERPT_SUBMIT, _resp(_use("read", 3, url=PAGE_URL)),
-             _resp(_use("submit", 4, decision="qualified", explanation="x",
-                        evidence=[{"url": PAGE_URL, "quote": "now employs 140 people"}]))]
-    agent, client = _agent(turns)
-    d = agent.qualify(_account(), context)
-    assert d.decision == "qualified" and len(d.evidence) == 1
-    assert [s.get("outcome") for s in agent.last_trace][1] == "rejected_unverified_evidence"
-    sent_back = client.requests[2]["messages"][-1]["content"][0]
-    assert sent_back["is_error"] and "read" in sent_back["content"]
-
-
-@pytest.mark.unit
 def test_only_urls_from_a_search_can_be_read(context):
     exa = FakeExa()
-    turns = [_resp(_use("read", 1, url="https://attacker.example/x")),
-             _resp(_use("submit", 2, decision="insufficient_evidence", explanation="x", evidence=[]))]
+    turns = [_resp(_use("read", 1, url="https://attacker.example/x")), _submit(2, assessment="insufficient_evidence")]
     agent, _ = _agent(turns, exa)
     agent.qualify(_account(), context)
     assert exa.calls == []
@@ -151,7 +207,7 @@ def test_only_urls_from_a_search_can_be_read(context):
 
 @pytest.mark.unit
 def test_step_cap_stops_the_loop(context):
-    turns = [_resp(_use("search", i, query=f"q{i}")) for i in range(10)]
+    turns = [_resp(_use("search", i, query=f"q{i}", purpose="company_facts")) for i in range(10)]
     agent, client = _agent(turns, max_steps=3)
     d = agent.qualify(_account(), context)
     assert d.decision == "insufficient_evidence" and d.missing == ["research_step_cap_reached"]
@@ -161,8 +217,8 @@ def test_step_cap_stops_the_loop(context):
 @pytest.mark.unit
 def test_exa_budget_is_checked_before_each_call(context):
     exa = FakeExa()
-    turns = [_resp(_use("search", 1, query="a")), _resp(_use("search", 2, query="b")),
-             _resp(_use("submit", 3, decision="insufficient_evidence", explanation="x", evidence=[]))]
+    turns = [SEARCH, _resp(_use("search", 2, query="b", purpose="company_facts")),
+             _submit(3, assessment="insufficient_evidence")]
     agent, _ = _agent(turns, exa, max_exa_millidollars=5)
     agent.qualify(_account(), context)
     assert len(exa.calls) == 1 and agent.exa_spent_millidollars == 4
@@ -196,10 +252,48 @@ def test_api_error_fails_closed(context):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("value,expected", [
+    ("431", (431, 431)), ("~431 employees", (431, 431)), ("500-1,000", (500, 1000)),
+    ("between 500 and 1,000 employees", (500, 1000)), ("1.2k", (1200, 1200)), ("a few", None),
+])
+def test_headcount_parsing(value, expected):
+    from gtm_lab.agents.research import headcount_range
+    assert headcount_range(value) == expected
+
+
+@pytest.mark.unit
+def test_policy_accepts_a_field_filled_by_checked_research(make_workflow, state_dir):
+    """Before typed claims, a research-qualified account was always policy-blocked: its
+    evidence named a field the account flags as missing."""
+    from gtm_lab.observability.events import EventRecorder
+
+    turns = [SEARCH, READ, _submit(3, _claim())]
+    agent, _ = _agent(turns * 20)
+    wf = make_workflow(fallback_qualifier=agent)
+    wf.recorder = EventRecorder(state_dir / "events.jsonl")
+    acc_id = "A1"
+    acc = _account()
+
+    class OneAccount:
+        name = "one"
+
+        def discover(self, *, limit):
+            from gtm_lab.providers.base import ProviderResult
+            return ProviderResult(accounts=[acc.model_copy(deep=True)])
+
+    wf.discovery = OneAccount()
+    plan = wf.plan(limit=1, run_id="research-policy")
+    entry = next(e for e in plan.entries if e.account_id == acc_id)
+    assert entry.crm_action == "create_account" and entry.policy_failures == []
+    stored = wf.store.load_accounts(plan.run_id)[0]
+    assert stored.employees is None and "employees" in stored.fields_missing  # provider data untouched
+
+
+@pytest.mark.unit
 def test_workflow_records_the_steps_of_each_researched_account(make_workflow, state_dir):
     from gtm_lab.observability.events import EventRecorder
 
-    turns = [_resp(_use("submit", 1, decision="insufficient_evidence", explanation="x", evidence=[]))] * 20
+    turns = [_submit(1, assessment="insufficient_evidence")] * 20
     agent, client = _agent(turns)
     wf = make_workflow(fallback_qualifier=agent)
     wf.recorder = EventRecorder(state_dir / "events.jsonl")

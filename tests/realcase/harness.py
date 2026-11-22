@@ -143,10 +143,13 @@ def observe(plan, discovery: _Capture, cassette: Cassette, wf=None) -> dict:
 def _research(plan, domain: dict, wf) -> dict:
     """What the research loop decided, on what evidence, at what cost."""
     agent = wf.fallback_qualifier
-    decisions = [d for d in wf.store.load_decisions(plan.run_id) if d.decided_by == "llm"]
+    decisions = [d for d in wf.store.load_decisions(plan.run_id) if d.decided_by in ("llm", "hybrid")]
     return {
         "research_decisions": {domain[d.account_id]: d.decision for d in decisions},
-        "research_evidence_kept": {domain[d.account_id]: len(d.evidence) for d in decisions},
+        "research_claims_checked": {domain[d.account_id]: sum(c.check == "quote_found" for c in d.claims)
+                                    for d in decisions},
+        "research_resolutions": {domain[d.account_id]: {r.field: r.status for r in d.resolutions}
+                                 for d in decisions},
         "research_missing": {domain[d.account_id]: d.missing for d in decisions},
         "research_errors": agent.errors,
         "research_llm_calls": agent.llm_calls,

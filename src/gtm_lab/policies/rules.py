@@ -67,9 +67,20 @@ def evaluate_entry(
         )
 
     # 5. Fields_missing cross-check: a decision that cites a field as evidence while
-    # the account explicitly reports it as missing is a bug somewhere upstream.
+    # the account explicitly reports it as missing is a bug somewhere upstream, unless
+    # research filled that field from checked, sourced claims (typed, not string-matched).
+    filled = {r.field for r in decision.resolutions if r.status == "filled"}
     for fm in account.fields_missing:
+        if fm in filled:
+            continue
         if any(fm.lower() in e.lower() for e in decision.evidence):
             failures.append(f"Evidence references field '{fm}' but Account flags it missing")
+
+    # 6. A field filled by research must rest on at least one claim that passed its checks
+    # (quote in a page read in the run, page about this company).
+    checked = {c.claim_id for c in decision.claims if c.check == "quote_found"}
+    for r in decision.resolutions:
+        if r.status == "filled" and not (set(r.claim_ids) & checked):
+            failures.append(f"Field '{r.field}' was filled by research without a checked source")
 
     return failures

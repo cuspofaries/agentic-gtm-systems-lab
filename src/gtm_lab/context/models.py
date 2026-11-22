@@ -102,6 +102,16 @@ class ContactSettings(BaseModel):
     on_unverified_email: Literal["keep", "drop_email"] = "keep"
 
 
+class ResearchPolicy(BaseModel):
+    """Bounds of web research (`--research`, `--opportunity`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Company facts (headcount, location) stay true longer than events: research about them
+    # searches this far back. Events use signal_policy.max_signal_age_days.
+    company_facts_max_age_days: int = Field(default=730, ge=1)
+
+
 class SignalSettings(BaseModel):
     """Buying-signal search (`--signals exa`). Off unless a signal provider is selected."""
 
@@ -128,3 +138,4 @@ class GTMContext(BaseModel):
     discovery: DiscoverySettings = Field(default_factory=DiscoverySettings)
     contacts: ContactSettings = Field(default_factory=ContactSettings)
     signals: SignalSettings = Field(default_factory=SignalSettings)
+    research_policy: ResearchPolicy = Field(default_factory=ResearchPolicy)
