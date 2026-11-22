@@ -19,11 +19,17 @@ Two routes, same code:
 
 Module 5 is the only one with a human approval; it uses the local mock CRM only. Do not point these exercises at a real CRM.
 
+Requirements: a POSIX shell (the snippets use `export`, `$(...)`, `sed -i` and heredocs; on macOS use `sed -i ''`), Python 3.12. Every command and expected outcome on this page is checked offline in CI by `tests/integration/test_learning_path.py`, which also fails if the page quotes a `gtm-lab` option or a `pytest -k` selection that no longer exists.
+
 ---
 
 ## 1. Data Foundation: identity, provenance, unknowns
 
 **Concept.** A record is useful only if you know where it came from and what it does not say. A canonical domain is the company's identity; `fields_missing` and `signal_search` make gaps explicit; a page quote is a claim about what a page says, not a verified fact.
+
+**Why it matters to a GTM team.** A GTM team pays for every wrong record twice: once to enrich it, once when a rep acts on it. Knowing what is missing and where each fact came from is what lets the rest of the system abstain instead of guessing.
+
+**Where it lives.** First layer: everything downstream reads these records (see [`architecture.md`](architecture.md), step 1 to 3).
 
 **Code location.** `src/gtm_lab/models.py` (`Account`, `SourceAttribution`, `Confidence`, `SourcedClaim`, `FactResolution`), `src/gtm_lab/util.py` (`canonicalize_domain`), `src/gtm_lab/persistence/store.py`.
 
@@ -55,6 +61,10 @@ print([x for x in d['decisions'] if x['account_id']=='acc_005'][0]['decision'])"
 
 **Concept.** The data layer fetches and cleans facts behind interfaces. Reconciliation against the CRM happens before any paid call. A provider failure is reported, not read as "no data".
 
+**Why it matters to a GTM team.** Duplicate accounts and paid enrichment of companies already in the CRM are among the most common GTM data costs; reconciliation before spending prevents both.
+
+**Where it lives.** Steps 1, 2, 4 and 7 of the run: discovery, signals, CRM reconciliation, enrichment.
+
 **Code location.** `src/gtm_lab/providers/base.py` (`DiscoveryProvider`, `EnrichmentProvider`, `ProviderResult`), `providers/fixture_discovery.py`, `providers/pdl.py`, `crm/base.py`, `crm/mock.py`, reconciliation in `workflows/account_discovery.py`.
 
 **Run it.** With the run of module 1:
@@ -80,6 +90,10 @@ print([(e['account_id'], e['crm_action'], e['skip_reason']) for e in d['plan']['
 ## 3. GTM Brain: commercial knowledge as a reviewable file
 
 **Concept.** The ICP says which companies fit; the offer, pains and buying roles say why one might buy and who might care. Both live in one YAML file that changes by diff.
+
+**Why it matters to a GTM team.** ICP and positioning usually live in slides and heads; as a versioned file they become testable, reviewable and the same for every run.
+
+**Where it lives.** Read by every step; the only file most teams need to change to adapt the lab.
 
 **Code location.** `examples/account-discovery-to-crm/config/gtm-context.yaml`, `src/gtm_lab/context/models.py` (`GTMContext`, `Offer`, `PainPoint`, `BuyingRole`), every key in [`configuration.md`](configuration.md).
 
@@ -109,6 +123,10 @@ import json,sys; print([(x['account_id'], x['decision']) for x in json.load(sys.
 ## 4. Agentic research: what the agent chooses, what the code checks
 
 **Concept.** For accounts the rules cannot judge, Claude searches, reads and reports observations. The code checks every quote, has each supporting quote judged independently against the pain, and credits a disconfirmation check only if it was really performed.
+
+**Why it matters to a GTM team.** Signals like hiring or funding are cheap to find and easy to over-read; the value is in telling the one that matters for your offer from the many that do not, and in admitting when the pages do not say.
+
+**Where it lives.** Steps 3 and 5 of the run, both optional: research for missing facts, opportunity investigation.
 
 **Code location.** `src/gtm_lab/agents/research_tools.py` (tools, budgets, loop), `agents/opportunity.py`, `evaluations/opportunity_eval.py` (the fictional web), `evals/decisions/fresh.yaml` (cases and labels).
 
@@ -158,6 +176,10 @@ EOF
 
 **Concept.** Spending and writing are deterministic: a budget, an action policy, hard checks, a human approval, idempotent writes. Gating enrichment on the assessment saves contacts and can also miss opportunities.
 
+**Why it matters to a GTM team.** This is where money is spent and records are written. Keeping it deterministic and approved by a person is what makes an agentic system safe to run on a real CRM.
+
+**Where it lives.** Steps 6 to 9, then `approve` and `sync`.
+
 **Code location.** `src/gtm_lab/policies/opportunity_action.py`, `policies/rules.py`, `EnrichmentBudget` and sync in `workflows/account_discovery.py`, `review.py`.
 
 **Run it.**
@@ -196,6 +218,10 @@ gtm-lab sync $RUN --json                  # second run: all idempotent no-ops
 ## 6. Evaluation: what improved, what regressed
 
 **Concept.** A change is better only if it is measured on cases it was not tuned on, against a baseline, with costs. Small fictional sets show behavior, not rates.
+
+**Why it matters to a GTM team.** Without a baseline and labeled cases, an agent that sounds convincing is indistinguishable from one that is right.
+
+**Where it lives.** `gtm-lab eval` after a run; `opportunity-eval` and `decision-eval` on labeled cases; the test suite in CI.
 
 **Code location.** `evaluations/checks.py`, `evaluations/opportunity_eval.py`, `evaluations/decision_eval.py`, `evals/`, `tests/`.
 
