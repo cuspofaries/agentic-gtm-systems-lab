@@ -56,13 +56,16 @@ def test_fallback_only_sees_insufficient_evidence_cases(make_workflow):
     plan = wf.plan(limit=50)
     assert len(seen) == 1 and '"acc_005"' in seen[0]
     events = [e for e in wf.recorder.read(plan.run_id) if e["event_type"] == "qualification.fallback"]
+    # The model proposed not_qualified with no checked disqualifying fact: recorded, not applied.
     assert events[0]["payload"] == {
         "account_id": "acc_005",
         "baseline_decision": "insufficient_evidence",
-        "fallback_decision": "not_qualified",
+        "fallback_decision": "insufficient_evidence",
         "fallback_decided_by": "llm",
-        "agrees_with_baseline": False,
+        "agrees_with_baseline": True,
     }
+    d = next(d for d in wf.store.load_decisions(plan.run_id) if d.account_id == "acc_005")
+    assert "llm_proposal_not_applied:not_qualified" in d.missing
 
 
 @pytest.mark.unit
@@ -96,7 +99,10 @@ def test_llm_evidence_matching_the_account_is_kept(make_workflow):
     wf = make_workflow(fallback_qualifier=LLMQualifier(provider_call=provider))
     plan = wf.plan(limit=50)
     d = next(d for d in wf.store.load_decisions(plan.run_id) if d.account_id == "acc_005")
-    assert d.decision == "qualified" and d.decided_by == "llm"
+    # A grounded 'qualified' is still only a proposal: no new fact was checked, the rules
+    # already found these fields insufficient, so the decision does not move.
+    assert d.decision == "insufficient_evidence" and d.decided_by == "llm"
+    assert "llm_proposal_not_applied:qualified" in d.missing
     assert d.evidence == ["hq_country: US (checked against account data)",
                           "industry: b2b saas (checked against account data)"]
     assert "llm_evidence_partly_ungrounded" in d.missing

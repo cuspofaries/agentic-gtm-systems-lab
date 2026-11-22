@@ -186,7 +186,7 @@ class DeterministicQualifier:
 
 
 class LLMQualifier:
-    """LLM-powered qualifier for ambiguous cases ONLY.
+    """LLM opinion on ambiguous cases ONLY (`--agentic`). Records a proposal; never decides.
 
     `provider_call` does the model call (see `anthropic_provider.AnthropicProviderCall`).
     Without one, the qualifier returns `insufficient_evidence` with an explicit note.
@@ -250,14 +250,21 @@ class LLMQualifier:
                 confidence=0.0,
                 decided_by=self.name,
             )
+        # The model's verdict is a proposal, never the decision. It sees only the account data
+        # the rules already judged insufficient, so it cannot bring a new, checked fact; letting
+        # it qualify or disqualify would decide the ICP without one. The decision stays
+        # insufficient_evidence; filling the missing facts is the research loop's job
+        # (--research exa), whose claims are checked and re-decided by the rules.
+        proposal = decision
         return QualificationDecision(
             account_id=account.account_id,
-            decision=decision,
-            explanation=str(raw.get("explanation", ""))[:1000],
+            decision="insufficient_evidence",
+            explanation=(f"LLM proposed '{proposal}' (not applied: an LLM verdict without newly checked "
+                         f"facts never decides the ICP). Its reasoning: {str(raw.get('explanation', ''))[:800]}"),
             evidence=evidence[:20],
-            missing=([str(x) for x in raw.get("missing", [])]
+            missing=([f"llm_proposal_not_applied:{proposal}"] + [str(x) for x in raw.get("missing", [])]
                      + (["llm_evidence_partly_ungrounded"] if ungrounded else []))[:20],
-            confidence=float(raw.get("confidence", 0.5)),
+            confidence=0.0,
             decided_by=self.name,
         )
 
