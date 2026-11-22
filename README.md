@@ -45,7 +45,7 @@ cd agentic-gtm-systems-lab
 claude
 ```
 
-Then type `/gtm-lab`. Claude Code introduces the lab, runs the offline demo, explains each decision from the persisted data, and walks you through approval and sync, asking before every state change. Choose this to learn the workflow or to investigate a run conversationally. See [`docs/claude-code.md`](docs/claude-code.md).
+Then type `/gtm-lab`. This needs only your usual Claude Code login: Claude Code is the guide, it runs the `gtm-lab` commands and reads their output. The default workflow it runs (offline demo, inspect, eval, approve, sync) makes no LLM call of its own. Claude Code introduces the lab, runs the offline demo, explains each decision from the persisted data, and walks you through approval and sync, asking before every state change. Choose this to learn the workflow or to investigate a run conversationally. See [`docs/claude-code.md`](docs/claude-code.md).
 
 ### Option B: Standalone CLI
 
@@ -140,6 +140,17 @@ Review artifact → .gtm-lab-state/review_run_20261121T215033Z.md
 What this tells you: two entries are skipped (one already in the CRM, one duplicate of another row in the same batch) and cost nothing to enrich. The last two were never enriched because the 50¢ budget ran out, and the table says so instead of showing an empty result. `acc_002` (an agency) and `acc_005` (no headcount) are absent because they did not qualify.
 
 ## Agentic mode (optional)
+
+Claude plays two different roles here, with two different credentials:
+
+| | Claude Code (`claude`, `/gtm-lab`) | Claude inside the workflow (`--agentic`, `--research exa`, `--opportunity exa`) |
+|---|---|---|
+| What it does | Guides you, runs `gtm-lab` commands, explains results | Decides parts of a run: undecided accounts, missing company facts, opportunity assessment |
+| Who calls Claude | Claude Code itself | The Python program, through the Anthropic SDK |
+| Credential | Your Claude Code login | `ANTHROPIC_API_KEY` (or an `ant auth login` profile) in the environment of the `gtm-lab` process |
+| Billing | Your Claude Code plan | Per call, on that API key, under the caps you set |
+
+Being logged in to Claude Code does not give the `gtm-lab` process an API key: the Python program makes its own API calls, like any other application. Without a key, `--agentic` says so and runs offline; `--research` and `--opportunity` stop with a message. With Claude Code you can still ask `/gtm-lab` to run these modes; the key must be exported in the shell Claude Code was started from.
 
 ```bash
 export ANTHROPIC_API_KEY=...       # or `ant auth login`
