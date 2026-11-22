@@ -196,6 +196,31 @@ class WritePlanStatus(StrEnum):
     FAILED = "failed"  # all operations failed
 
 
+class OpportunityAction(BaseModel):
+    """What the opportunity action policy proposed for one account, and what it cost or saved.
+
+    Deterministic (policies/opportunity_action.py), never an LLM. `applied` is true only
+    with `--enrichment-strategy opportunity_gated`; otherwise the record is a shadow
+    estimate of what gating would have done, for comparison.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str
+    strategy: Literal["all_qualified", "opportunity_gated"]
+    applied: bool
+    icp_decision: str
+    assessment_status: str  # an OpportunityAssessment status, or "not_assessed"
+    assessment_coverage: str | None = None
+    action: Literal["propose_enrichment", "defer", "research_more", "review"]
+    reason: str
+    personas: list[str] = Field(default_factory=list)  # personas proposed for enrichment
+    persona_reasons: dict[str, str] = Field(default_factory=dict)
+    provider_calls_avoided: int = 0
+    cost_avoided_max_cents: int = 0  # the announced maximum of the call not made
+    actual_cost_cents: int = 0
+
+
 class WritePlanEntry(BaseModel):
     """One row in a WritePlan - what we want to do about one discovered account."""
 
@@ -207,8 +232,9 @@ class WritePlanEntry(BaseModel):
     skipped: bool = False  # set true if this row cannot be promoted
     skip_reason: str | None = None
     enrichment_status: Literal[
-        "done", "budget_exceeded", "provider_failed", "not_needed"
+        "done", "budget_exceeded", "provider_failed", "not_needed", "deferred_by_policy"
     ] = "not_needed"
+    opportunity_action: OpportunityAction | None = None
 
 
 class WritePlan(BaseModel):

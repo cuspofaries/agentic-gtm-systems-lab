@@ -84,16 +84,19 @@ buying_roles:
     title_hints: [Sales Enablement Manager, Head of Sales Enablement]
     why: Owns onboarding content and ramp programs.
     pains: [slow-ramp, onboarding-at-scale]
+    personas: [Sales Enablement]
   - id: sales-sponsor
     role: sponsor
     title_hints: [VP Sales, Head of Sales]
     why: Carries the quota that slow ramp puts at risk.
     pains: [slow-ramp]
+    personas: [VP Sales, Head of Sales]
   - id: revops-stakeholder
     role: stakeholder
     title_hints: [Revenue Operations]
     why: Integrates the tool with CRM and reports ramp metrics.
     pains: [slow-ramp, onboarding-at-scale]
+    personas: [Revenue Operations]
 
 signal_interpretation:
   - signal_kind: sales_hiring

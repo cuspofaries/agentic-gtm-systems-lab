@@ -29,6 +29,8 @@ from ..models import (
     Account,
     ContactProposal,
     EnrichmentCost,
+    OpportunityAction,
+    OpportunityAssessment,
     QualificationDecision,
     ReconciliationMatch,
     WriteOperationResult,
@@ -38,6 +40,7 @@ from ..models import (
 )
 from ..observability.events import EventRecorder
 from ..persistence.store import RunStore
+from ..policies.opportunity_action import decide as decide_action
 from ..policies.rules import evaluate_entry
 from ..providers.base import DiscoveryProvider, EnrichmentProvider
 from ..providers.signals import SignalProvider
@@ -142,11 +145,19 @@ class AccountDiscoveryWorkflow:
         signals: SignalProvider | None = None,
         opportunity: OpportunityInvestigator | None = None,
         opportunity_include_undecided: bool = False,
+        opportunity_scope: str = "new",
+        enrichment_strategy: str = "all_qualified",
     ):
         self.context = context
         self.signals = signals
         self.opportunity = opportunity
         self.opportunity_include_undecided = opportunity_include_undecided
+        if opportunity_scope not in ("new", "all"):
+            raise ValueError(f"unknown opportunity scope {opportunity_scope!r}")
+        if enrichment_strategy not in ("all_qualified", "opportunity_gated"):
+            raise ValueError(f"unknown enrichment strategy {enrichment_strategy!r}")
+        self.opportunity_scope = opportunity_scope
+        self.enrichment_strategy = enrichment_strategy
         self.discovery = discovery
         self.enrichment = enrichment
         self.crm = crm
@@ -198,6 +209,8 @@ class AccountDiscoveryWorkflow:
             d = by_id[a.account_id].decision
             if d == "qualified":  # qualified accounts are reconciled: only those new to the CRM
                 m = matches_by_id.get(a.account_id)
+                if m is not None and m.match_type == "exact_domain" and self.opportunity_scope == "all":
+                    return True  # read-only intelligence on an existing CRM account; no write follows
                 return m is not None and m.match_type == "none"
             # Undecided accounts only on explicit opt-in; the assessment never promotes them.
             return d == "insufficient_evidence" and self.opportunity_include_undecided
@@ -218,6 +231,7 @@ class AccountDiscoveryWorkflow:
                 "coverage": a.coverage, "unsupported_claims": a.unsupported_claims,
                 "llm_cents": a.llm_cents, "exa_millidollars": a.exa_millidollars, "steps": a.trace})
         self.store.save_assessments(run_id, out)
+        return {a.account_id: a for a in out if a.assessed_by == "agent"}
 
     def plan(self, *, limit: int = 50, run_id: str | None = None) -> WritePlan:
         # The timestamp alone is per second: two plans in the same second would share it.
@@ -311,8 +325,9 @@ class AccountDiscoveryWorkflow:
 
         # 4b. Opportunity assessment (optional): before any paid contact enrichment, on new
         # accounts only. It never changes the ICP decision.
+        assessments: dict[str, OpportunityAssessment] = {}
         if self.opportunity is not None:
-            self._assess_opportunities(run_id, disc.accounts, decisions, matches_by_id)
+            assessments = self._assess_opportunities(run_id, disc.accounts, decisions, matches_by_id)
 
         # 5. Enrichment + 6. Policy evaluation → WritePlan entries
         budget = EnrichmentBudget(cap_cents=self.context.policy.enrichment_budget_cents)
@@ -346,8 +361,31 @@ class AccountDiscoveryWorkflow:
                 )
                 continue
 
-            # Fresh account → enrich only if budget allows
+            # Fresh account → opportunity action policy (gated mode), then enrich if budget allows
             persona_names = [p.name for p in self.context.personas]
+            decision_here = next(d for d in decisions if d.account_id == acc.account_id)
+            action_rec = None
+            if self.enrichment_strategy == "opportunity_gated" or self.opportunity is not None:
+                act, why, personas, persona_reasons = decide_action(
+                    decision_here, assessments.get(acc.account_id), self.context)
+                a_ = assessments.get(acc.account_id)
+                action_rec = OpportunityAction(
+                    account_id=acc.account_id, strategy=self.enrichment_strategy,
+                    applied=self.enrichment_strategy == "opportunity_gated", icp_decision=decision_here.decision,
+                    assessment_status=a_.assessment_status if a_ else "not_assessed",
+                    assessment_coverage=a_.coverage if a_ else None, action=act, reason=why,
+                    personas=personas, persona_reasons=persona_reasons)
+            if self.enrichment_strategy == "opportunity_gated":
+                if action_rec.action != "propose_enrichment":
+                    action_rec.provider_calls_avoided = 1
+                    action_rec.cost_avoided_max_cents = self.enrichment.max_cost_cents_per_call
+                    self.recorder.record(run_id, "enrichment.gated", action_rec.model_dump(mode="json"))
+                    entries.append(WritePlanEntry(
+                        account_id=acc.account_id, crm_action="create_account", crm_account_id=None,
+                        skipped=True, skip_reason=f"Opportunity policy: {action_rec.action}. {action_rec.reason}",
+                        enrichment_status="deferred_by_policy", opportunity_action=action_rec))
+                    continue
+                persona_names = action_rec.personas
             max_cost = self.enrichment.max_cost_cents_per_call
             new_contacts: list[ContactProposal] = []
             enrichment_status = "budget_exceeded"
@@ -392,12 +430,15 @@ class AccountDiscoveryWorkflow:
                     {"account_id": acc.account_id, "remaining_cents": budget.remaining},
                 )
 
+            if action_rec is not None:
+                action_rec.actual_cost_cents = cost
             entry = WritePlanEntry(
                 account_id=acc.account_id,
                 crm_action="create_account",
                 crm_account_id=None,
                 contacts_to_create=new_contacts,
                 enrichment_status=enrichment_status,
+                opportunity_action=action_rec,
             )
             overcharge_failure = (
                 f"Provider overcharge: {self.enrichment.name} reported {cost}¢, above its announced "

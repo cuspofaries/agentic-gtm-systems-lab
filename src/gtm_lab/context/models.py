@@ -126,6 +126,9 @@ class BuyingRole(BaseModel):
     title_hints: list[str] = Field(default_factory=list)
     why: str
     pains: list[str] = Field(default_factory=list)  # PainPoint ids
+    # Explicit mapping to `personas` names (the contact provider's title filters). Used by
+    # `--enrichment-strategy opportunity_gated` to enrich only the roles evidence supports.
+    personas: list[str] = Field(default_factory=list)
 
 
 class Offer(BaseModel):
@@ -204,6 +207,8 @@ class GTMContext(BaseModel):
         bad = [f"offer {o.id}: {x}" for o in self.offers for x in o.pains if x not in pains]
         bad += [f"role {r.id}: {x}" for r in self.buying_roles for x in r.pains if x not in pains]
         bad += [f"signal {i.signal_kind}: {x}" for i in self.signal_interpretation for x in i.may_suggest if x not in pains]
+        persona_names = {p.name for p in self.personas}
+        bad += [f"role {r.id} persona: {x}" for r in self.buying_roles for x in r.personas if x not in persona_names]
         if bad:
-            raise ValueError(f"unknown pain point id(s): {bad}")
+            raise ValueError(f"unknown pain point id(s) or persona name(s): {bad}")
         return self

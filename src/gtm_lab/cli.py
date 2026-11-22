@@ -232,6 +232,8 @@ def demo(
     opportunity: str = typer.Option("none", "--opportunity", help="Assess product-specific opportunity on new qualified accounts before enrichment: none (default) or exa. Uses Claude and Exa; spends money."),
     opportunity_include_undecided: bool = typer.Option(False, "--opportunity-include-undecided", help="Also assess accounts the ICP left insufficient_evidence (never promotes them)."),
     opportunity_exa_millidollars: int = typer.Option(50, "--opportunity-exa-millidollars", help="Opportunity only: Exa spend cap per run, in thousandths of a dollar."),
+    opportunity_scope: str = typer.Option("new", "--opportunity-scope", help="new (default): accounts new to the CRM. all: also existing CRM accounts, read-only."),
+    enrichment_strategy: str = typer.Option("all_qualified", "--enrichment-strategy", help="all_qualified (default): enrich every new qualified account. opportunity_gated: only evidence-backed opportunities, mapped personas only."),
 ):
     """Run the demo end to end. Stops at the human approval gate - no CRM writes."""
     out = err_console if as_json else console
@@ -306,6 +308,14 @@ def demo(
                          signals=signals)
     wf.opportunity = investigator
     wf.opportunity_include_undecided = opportunity_include_undecided
+    if opportunity_scope not in ("new", "all"):
+        _fail(f"Unknown opportunity scope '{opportunity_scope}'. Use 'new' or 'all'.")
+    if enrichment_strategy not in ("all_qualified", "opportunity_gated"):
+        _fail(f"Unknown enrichment strategy '{enrichment_strategy}'. Use 'all_qualified' or 'opportunity_gated'.")
+    wf.opportunity_scope, wf.enrichment_strategy = opportunity_scope, enrichment_strategy
+    if enrichment_strategy == "opportunity_gated" and investigator is None:
+        out.print("[yellow]opportunity_gated without --opportunity: no account is assessed, so no contact "
+                  "enrichment is proposed (fail closed).[/yellow]")
     if wf.signals is not None:
         out.print(f"[cyan]Signals:[/cyan] {wf.signals.name}, up to "
                   f"${wf.signals.max_cost_millidollars_per_call / 1000:.3f} per account, "

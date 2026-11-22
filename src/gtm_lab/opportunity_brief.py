@@ -11,8 +11,14 @@ from .models import OpportunityAssessment
 from .persistence.store import RunStore
 
 
+def _actions(run_id: str, store: RunStore) -> dict:
+    plan = store.load_plan(run_id)
+    return {e.account_id: e for e in plan.entries} if plan else {}
+
+
 def brief_json(run_id: str, store: RunStore) -> list[dict]:
     accounts = {a.account_id: a for a in store.load_accounts(run_id)}
+    entries = _actions(run_id, store)
     rows: dict[str, dict] = {}
     for a in store.load_assessments(run_id):
         acc = accounts.get(a.account_id)
@@ -21,6 +27,12 @@ def brief_json(run_id: str, store: RunStore) -> list[dict]:
         row[a.assessed_by] = a.model_dump(mode="json", exclude={"trace"})
         if a.assessed_by == "agent":
             row["agent"]["steps"] = len([t for t in a.trace if t.get("tool")])
+        e = entries.get(a.account_id)
+        row["crm"] = ("existing (read-only)" if e is not None and e.crm_action == "skip_existing" and e.crm_account_id
+                      else "new")
+        if e is not None and e.opportunity_action is not None:
+            row["policy"] = e.opportunity_action.model_dump(mode="json")
+            row["enrichment_status"] = e.enrichment_status
     return list(rows.values())
 
 
@@ -80,7 +92,15 @@ def render_brief(run_id: str, store: RunStore) -> str:
         base = assessments.get((row["account_id"], "baseline"))
         first = agent or base
         lines.append(f"## {row['name'] or row['account_id']} (`{row['domain']}`)")
-        lines.append(f"- ICP: **{first.icp_decision}** (by {first.icp_decided_by}) · Offer: `{first.offer_id}`")
+        lines.append(f"- ICP: **{first.icp_decision}** (by {first.icp_decided_by}) · Offer: `{first.offer_id}` "
+                     f"· CRM: {row.get('crm', 'new')}")
+        pol = row.get("policy")
+        if pol:
+            mode = "applied" if pol["applied"] else "shadow estimate, not applied (strategy all_qualified)"
+            spend = (f"{pol['provider_calls_avoided']} contact call avoided (up to {pol['cost_avoided_max_cents']}¢)"
+                     if pol["provider_calls_avoided"] else f"contact enrichment spent {pol['actual_cost_cents']}¢")
+            lines.append(f"- Policy ({mode}): **{pol['action']}** · {pol['reason']} · {spend}"
+                         + (f" · personas: {', '.join(pol['personas'])}" if pol["personas"] else ""))
         if base:
             lines.append(f"- Baseline (signal kind only, no AI): `{base.assessment_status}` → "
                          f"`{base.recommended_next_action}`")

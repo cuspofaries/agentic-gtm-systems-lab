@@ -72,6 +72,7 @@ def render_review(plan: WritePlan, store: RunStore) -> str:
                     "provider_failed": "enrichment provider failed",
                     "done": "provider returned no matching contact",
                     "not_needed": "no enrichment requested",
+                    "deferred_by_policy": "deferred by the opportunity policy",
                 }[e.enrichment_status]
                 lines.append(f"- Contacts to create: *(none - {why})*")
             lines.append("")
