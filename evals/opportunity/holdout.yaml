@@ -1,0 +1,103 @@
+# Held-out opportunity cases. Written and labeled on 2026-11-22 after the first evaluation
+# and before any model output on them was seen; not used to tune any check. Same format
+# and conventions as cases.yaml (fictional companies, fictional web, labels by the case
+# author: one person's reading).
+
+defaults:
+  employees: 90
+  industry: B2B SaaS Software
+  hq_country: US
+  icp: qualified
+
+cases:
+  - id: ho-relevant-coaching
+    what: AE hiring with a stated need to standardize coaching for new reps.
+    name: Weatherby Cloud
+    domain: weatherby.example
+    signals: [{kind: sales_hiring, title: "Account Executive - Weatherby Cloud", url: "https://weatherby.example/jobs/ae", days_ago: 8}]
+    pages:
+      "https://weatherby.example/jobs/ae": {title: "Account Executive - Weatherby Cloud", days_ago: 8, text: "Weatherby Cloud is adding eight Account Executives this quarter. Each new rep currently learns from whoever has time; we want a standard coaching playbook so new hires reach quota faster."}
+    label: {relevant: true}
+
+  - id: ho-relevant-but-freeze-later
+    what: Hiring page supports the pain; a newer article (search only) announces a hiring freeze.
+    name: Duskfield Analytics
+    domain: duskfield.example
+    signals: [{kind: sales_hiring, title: "SDR - Duskfield Analytics", url: "https://duskfield.example/careers/sdr", days_ago: 40}]
+    pages:
+      "https://duskfield.example/careers/sdr": {title: "SDR - Duskfield Analytics", days_ago: 40, text: "Duskfield Analytics is hiring SDRs and building a new onboarding program to cut ramp time."}
+      "https://news.example/duskfield-freeze": {title: "Duskfield Analytics freezes hiring", days_ago: 6, text: "Duskfield Analytics froze all sales hiring this week and paused its planned onboarding program."}
+    label: {relevant: null}
+
+  - id: ho-relevant-search-only
+    what: No signal; the company's own blog (found by search) describes slow ramp for new reps.
+    name: Copperleaf Data
+    domain: copperleaf.example
+    signals: []
+    signal_search: not_searched
+    pages:
+      "https://copperleaf.example/blog/ramp": {title: "What we learned about sales ramp at Copperleaf Data", days_ago: 15, text: "At Copperleaf Data our new account executives take eight months to ramp. This year we are investing in onboarding and training to bring that down."}
+    label: {relevant: true}
+
+  - id: ho-relevant-funding-sales
+    what: Funding to hire a sales team from scratch, with onboarding called out.
+    name: Hollowbrook AI
+    domain: hollowbrook.example
+    signals: [{kind: revenue_expansion, title: "Hollowbrook AI raises seed to build its sales team", url: "https://news.example/hollowbrook-seed", days_ago: 22}]
+    pages:
+      "https://news.example/hollowbrook-seed": {title: "Hollowbrook AI raises seed to build its sales team", days_ago: 22, text: "Hollowbrook AI raised $6M to hire its first ten sales reps. The founders said building a repeatable onboarding process for them is the first operational task."}
+    label: {relevant: true}
+
+  - id: ho-not-relevant-partner-role
+    what: The sales_hiring signal is a channel partner manager; no team growth, onboarding already handled.
+    name: Greystone Forms
+    domain: greystone.example
+    signals: [{kind: sales_hiring, title: "Partner Manager - Greystone Forms", url: "https://greystone.example/jobs/partner", days_ago: 9}]
+    pages:
+      "https://greystone.example/jobs/partner": {title: "Partner Manager - Greystone Forms", days_ago: 9, text: "Greystone Forms is replacing its departing Partner Manager. This is a single backfill; the sales team size is unchanged and our onboarding program is well established."}
+    label: {relevant: false}
+
+  - id: ho-not-relevant-incumbent
+    what: Hiring, and the page says onboarding runs on a platform they are happy with.
+    name: Larkspur HR
+    domain: larkspur.example
+    signals: [{kind: sales_hiring, title: "SDR - Larkspur HR", url: "https://larkspur.example/careers/sdr", days_ago: 5}]
+    pages:
+      "https://larkspur.example/careers/sdr": {title: "SDR - Larkspur HR", days_ago: 5, text: "Larkspur HR is hiring two SDRs. New hires follow our onboarding program on the enablement platform we have used for three years, and ramp time is already under two months."}
+    label: {relevant: false}
+
+  - id: ho-not-relevant-old-funding
+    what: A recently crawled page about a funding round from 2022.
+    name: Thornbury Logistics Cloud
+    domain: thornbury.example
+    signals: [{kind: revenue_expansion, title: "Thornbury Logistics Cloud funding", url: "https://thornbury.example/press/funding", days_ago: 4}]
+    pages:
+      "https://thornbury.example/press/funding": {title: "Thornbury Logistics Cloud funding", days_ago: 4, text: "Press archive: in June 2022 Thornbury Logistics Cloud raised a Series A to expand its sales team and onboarding. No funding has been announced since."}
+    label: {relevant: false}
+
+  - id: ho-abstain-namesake
+    what: The only relevant page is about a different company with a close name.
+    name: Bluefin Software
+    domain: bluefinsoft.example
+    signals: [{kind: sales_hiring, title: "Bluefin Marine is hiring sales reps", url: "https://jobs.example/bluefin-marine", days_ago: 7}]
+    pages:
+      "https://jobs.example/bluefin-marine": {title: "Bluefin Marine is hiring sales reps", days_ago: 7, text: "Bluefin Marine, a boat dealer in Florida, is hiring sales reps and rebuilding onboarding to reduce ramp time."}
+    label: {relevant: null}
+
+  - id: ho-abstain-generic
+    what: A generic hiring page with no word about onboarding, ramp or training.
+    name: Mapleton Billing
+    domain: mapleton.example
+    signals: [{kind: sales_hiring, title: "Sales roles at Mapleton Billing", url: "https://mapleton.example/careers", days_ago: 10}]
+    pages:
+      "https://mapleton.example/careers": {title: "Sales roles at Mapleton Billing", days_ago: 10, text: "Mapleton Billing is hiring two Account Executives and one SDR. Competitive salary, remote-friendly, great team."}
+    label: {relevant: null}
+
+  - id: ho-abstain-unreadable
+    what: The signal page fails and search returns nothing else.
+    name: Ivory Gate Systems
+    domain: ivorygate.example
+    signals: [{kind: sales_hiring, title: "AE - Ivory Gate Systems", url: "https://ivorygate.example/jobs/ae", days_ago: 6}]
+    pages:
+      "https://ivorygate.example/jobs/ae": {title: "AE - Ivory Gate Systems", days_ago: 6, fail: true}
+    label: {relevant: null, coverage: incomplete}
