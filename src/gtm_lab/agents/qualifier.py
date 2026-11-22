@@ -118,10 +118,17 @@ class DeterministicQualifier:
             and within_window(s.event_date, ctx.signal_policy.max_signal_age_days,
                               now=self._now() if self._now else None)
         ]
+        signal_ok = True
         if fresh_signals:
             evidence.append(f"{len(fresh_signals)} relevant signal(s) within window")
         elif ctx.policy.require_signal_for_qualification:
-            disqualifiers.append("no relevant signal in freshness window")
+            if account.signal_search in ("no_result", "found"):
+                # A search ran: the absence of a relevant, fresh signal is a fact.
+                disqualifiers.append(f"no relevant signal in freshness window (signal search: {account.signal_search})")
+            else:
+                # Not searched, failed or out of budget: nothing is known either way.
+                missing.append(f"signals {account.signal_search.replace('_', ' ')}")
+                signal_ok = False
 
         # --- Disqualifiers short-circuit ---
         if disqualifiers:
@@ -136,7 +143,7 @@ class DeterministicQualifier:
             )
 
         # --- Missing critical fields → insufficient_evidence ---
-        if not (geo_ok and emp_ok and industry_ok):
+        if not (geo_ok and emp_ok and industry_ok and signal_ok):
             return QualificationDecision(
                 account_id=account.account_id,
                 decision="insufficient_evidence",

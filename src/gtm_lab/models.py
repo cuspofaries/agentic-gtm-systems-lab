@@ -64,6 +64,9 @@ class Account(BaseModel):
     signals: list[Signal] = Field(default_factory=list)
     employees_confidence: Confidence = Confidence.UNKNOWN
     fields_missing: list[str] = Field(default_factory=list)
+    # Whether a signal source was searched for this account, and how it went. "No signal
+    # found" is only a fact when a search ran and returned nothing (`no_result`).
+    signal_search: Literal["not_searched", "no_result", "found", "failed", "budget_exhausted"] = "not_searched"
 
     @field_validator("domain")
     @classmethod

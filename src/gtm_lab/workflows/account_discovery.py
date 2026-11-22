@@ -17,6 +17,7 @@ interrupted run can resume from where it stopped.
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -107,6 +108,14 @@ class EnrichmentBudget:
             raise ValueError("EnrichmentBudget.charge called over cap - check can_spend first")
         self.spent_cents += cost_cents
 
+    def record_overrun(self, cost_cents: int) -> None:
+        """Book a cost that was not allowed: a provider charged more than it announced.
+
+        The spend becomes visible as over the cap (and `gtm-lab eval` fails on it) instead
+        of being clamped to the announced maximum.
+        """
+        self.spent_cents += cost_cents
+
     @property
     def remaining(self) -> int:
         return max(0, self.cap_cents - self.spent_cents)
@@ -157,6 +166,7 @@ class AccountDiscoveryWorkflow:
         spent = 0
         for acc in accounts:
             if spent + self.signals.max_cost_millidollars_per_call > cap:
+                acc.signal_search = "budget_exhausted"
                 self.recorder.record(run_id, "signals.budget_exceeded",
                                      {"account_id": acc.account_id, "spent_millidollars": spent,
                                       "cap_millidollars": cap})
@@ -164,6 +174,7 @@ class AccountDiscoveryWorkflow:
             r = self.signals.find(acc, max_age_days=self.context.signal_policy.max_signal_age_days)
             spent += r.cost_millidollars
             acc.signals.extend(r.signals)
+            acc.signal_search = "failed" if r.failures else ("found" if r.signals else "no_result")
             self.recorder.record(run_id, "signals.account", {
                 "account_id": acc.account_id,
                 "provider": self.signals.name,
@@ -176,7 +187,8 @@ class AccountDiscoveryWorkflow:
         return spent
 
     def plan(self, *, limit: int = 50, run_id: str | None = None) -> WritePlan:
-        run_id = run_id or f"run_{ts_slug()}"
+        # The timestamp alone is per second: two plans in the same second would share it.
+        run_id = run_id or f"run_{ts_slug()}_{secrets.token_hex(3)}"
         self.recorder.record(
             run_id,
             "workflow.start",
@@ -301,12 +313,20 @@ class AccountDiscoveryWorkflow:
             max_cost = self.enrichment.max_cost_cents_per_call
             new_contacts: list[ContactProposal] = []
             enrichment_status = "budget_exceeded"
+            cost, overcharge = 0, False
             if budget.can_spend(max_cost):
                 enrich_result = self.enrichment.enrich(acc, persona_names)
                 reported = enrich_result.cost_cents
-                # A provider cannot charge more than the maximum it announced.
-                cost = max_cost if reported is None else min(reported, max_cost)
-                budget.charge(cost)
+                cost = max_cost if reported is None else reported
+                overcharge = cost > max_cost
+                if overcharge:
+                    # A provider charged more than the maximum it announced: book what it
+                    # reported and flag it, never clamp it to look compliant.
+                    budget.record_overrun(cost)
+                    self.recorder.record(run_id, "enrichment.overcharge", {
+                        "account_id": acc.account_id, "reported_cents": cost, "announced_max_cents": max_cost})
+                else:
+                    budget.charge(cost)
                 costs.append(
                     EnrichmentCost(
                         account_id=acc.account_id,
@@ -341,6 +361,9 @@ class AccountDiscoveryWorkflow:
                 contacts_to_create=new_contacts,
                 enrichment_status=enrichment_status,
             )
+            overcharge_failure = (
+                f"Provider overcharge: {self.enrichment.name} reported {cost}¢, above its announced "
+                f"maximum of {max_cost}¢ per call" if enrichment_status != "budget_exceeded" and overcharge else None)
             # Policy evaluation
             account_obj = _by_id(disc.accounts, acc.account_id)
             decision = next(d for d in decisions if d.account_id == acc.account_id)
@@ -350,6 +373,8 @@ class AccountDiscoveryWorkflow:
                 entry=entry,
                 context=self.context,
             )
+            if overcharge_failure:
+                entry.policy_failures.append(overcharge_failure)
             entries.append(entry)
 
         self.store.save_costs(run_id, costs)

@@ -65,6 +65,8 @@ class FixtureDiscoveryProvider(DiscoveryProvider):
                         observed_at=_parse_dt(row.get("observed_at")) or datetime.now(UTC),
                     ),
                     signals=signals,
+                    # The fixture is a complete signal source for its accounts.
+                    signal_search=row.get("signal_search", "found" if signals else "no_result"),
                     employees_confidence=row.get("employees_confidence", "unknown"),
                     fields_missing=list(row.get("fields_missing", [])),
                 )

@@ -104,3 +104,25 @@ def test_llm_qualifier_rejects_evidence_less_qualified(context):
     q = LLMQualifier(provider_call=bogus)
     d = q.qualify(_acc(), context)
     assert d.decision == "insufficient_evidence"  # evidence floor enforced on LLM output
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("state,decision", [
+    ("no_result", "not_qualified"),         # searched, nothing relevant: a fact
+    ("not_searched", "insufficient_evidence"),
+    ("failed", "insufficient_evidence"),
+    ("budget_exhausted", "insufficient_evidence"),
+])
+def test_required_signal_distinguishes_no_result_from_not_searched(context, state, decision):
+    from gtm_lab.agents.qualifier import DeterministicQualifier
+    from gtm_lab.models import Account, Confidence, SourceAttribution
+
+    ctx = context.model_copy(deep=True)
+    ctx.policy.require_signal_for_qualification = True
+    acc = Account(account_id="A", domain="a.example", name="A", employees=80, employees_confidence=Confidence.VERIFIED,
+                  industry="B2B SaaS Software", hq_country="US", signal_search=state,
+                  source=SourceAttribution(provider="t"))
+    d = DeterministicQualifier().qualify(acc, ctx)
+    assert d.decision == decision
+    if decision == "insufficient_evidence":
+        assert any("signals" in m for m in d.missing)
