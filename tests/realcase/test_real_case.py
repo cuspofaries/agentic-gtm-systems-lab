@@ -11,7 +11,9 @@ Modes (`GTM_LAB_REAL_CASE_MODE`):
 
 - `replay` (default): free, offline. Every provider answer comes from the cassette.
 - `record`: calls People Data Labs, FullEnrich, ZeroBounce and HubSpot for real and
-  spends credits. Needs their keys. Writes the cassette and `observed.yaml`.
+  spends credits. Needs their keys. Writes the cassette.
+
+Both modes write `observed.yaml`, the run reduced to the values `expect:` can check.
 
 HubSpot is only read: the test plans, it never approves or syncs, and it fails if the
 plan made any CRM call that changes data.

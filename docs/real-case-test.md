@@ -11,7 +11,7 @@ your-case/
   config/gtm-context.yaml   ICP, personas, budget (same format as the example)
   expected.yaml             run settings, then the expected results
   cassette.json             recorded provider exchanges (written by record mode)
-  observed.yaml             what the last recorded run produced (written by record mode)
+  observed.yaml             what the last run produced (written by both modes)
 ```
 
 `expected.yaml` starts with the run settings only:
@@ -54,6 +54,7 @@ It fails when a result differs from `expect:`, and it prints each difference. It
 | `skip_existing` | Domains already in the CRM, so not created again. |
 | `create_account` | Domains the plan proposes to create. |
 | `approvable` | Domains with no policy failure, ready for approval. |
+| `enrichment_status` | Per domain: `done`, `budget_exceeded`, `provider_failed` (for example FullEnrich out of credits) or `not_needed`. |
 | `contacts_proposed`, `emails_found` | Contacts in the plan, and how many have an email. |
 | `emails_by_status` | Emails by verdict: `valid`, `risky`, `invalid`, `unknown`. |
 | `crm_writes_during_plan` | Must be empty. The test fails on any CRM call that changes data. |
@@ -65,6 +66,14 @@ The test only plans. It never approves or syncs, and HubSpot is only read.
 Provider, method, URL, request body, response status and body, and the response headers the connectors read (PDL credit headers, `Retry-After`). Request headers are never stored, since they carry the keys; ZeroBounce's `api_key` form field is removed from the body. Before writing the file the test checks that no key appears in it, and refuses to save if one does.
 
 The responses contain real names and emails. Treat the cassette as personal data and keep it private.
+
+## Measured on real data
+
+Two private cases were recorded on 2026-11-22, against a HubSpot test portal that already held the companies of earlier runs.
+
+- **Companies already in the CRM.** A search whose 9 matching companies had all been synced before: 9 found in HubSpot, 9 skipped, no contact searched, nothing written. Cost: PDL company credits only.
+- **New companies.** A search for smaller companies (38 matching, 4 requested): 4 accounts to create, 2 enriched before the budget stopped the other 2 (`budget_exceeded`). One contact got an email that FullEnrich rated `HIGH_PROBABILITY` and ZeroBounce `valid`. For the other, FullEnrich ran out of credits (`provider_failed`) and the contact stayed in the plan without an email. Credits reported in the providers' answers matched their balances: FullEnrich 1, ZeroBounce 1, PDL 4 companies and 2 people. Budget charged: 68 cents (2 x 28 + 10 + 2).
+- **Check the total before asking for more.** PDL's answer carries `total` (matching companies). Raising `limit` above it returns nothing new and still costs one credit per record; read it, and the CRM's existing records, before re-recording.
 
 ## Limits
 

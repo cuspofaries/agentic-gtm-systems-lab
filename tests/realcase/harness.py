@@ -79,6 +79,7 @@ def observe(plan, discovery: _Capture, cassette: Cassette) -> dict:
         "create_account": sorted(domain[e.account_id] for e in plan.entries
                                  if e.crm_action == "create_account" and not e.skipped),
         "approvable": sorted(domain[e.account_id] for e in plan.approvable_entries),
+        "enrichment_status": {domain[e.account_id]: e.enrichment_status for e in plan.entries},
         "contacts_proposed": len(contacts),
         "emails_found": sum(1 for c in contacts if c.email),
         "emails_by_status": {s: sum(1 for c in contacts if c.email_status == s)
@@ -93,7 +94,7 @@ def run_case(case: Path, mode: str, keys: dict, state_dir: Path, *,
              no_wait: bool = False) -> tuple[dict, dict | None]:
     """Plan the case once. Returns (observed, differences from expected.yaml's `expect`).
 
-    Record mode saves the cassette and observed.yaml next to expected.yaml.
+    Record mode saves the cassette; both modes write observed.yaml next to expected.yaml.
     Raises AssertionError on what must never happen: a CRM write while planning, an
     overspent budget, or (on replay) recorded calls the code no longer makes.
     """
@@ -107,9 +108,9 @@ def run_case(case: Path, mode: str, keys: dict, state_dir: Path, *,
     assert observed["crm_writes_during_plan"] == [], "planning must not change the CRM"
     if mode == "record":
         cassette.save()
-        (case / "observed.yaml").write_text(yaml.safe_dump(observed, sort_keys=False))
     else:
         assert not cassette.unused(), f"recorded calls not made on replay: {cassette.unused()}"
+    (case / "observed.yaml").write_text(yaml.safe_dump(observed, sort_keys=False))
     assert plan.enrichment_spent_cents <= plan.enrichment_budget_cents
     expect = spec.get("expect")
     if expect is None:

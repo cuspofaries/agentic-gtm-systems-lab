@@ -295,7 +295,7 @@ agentic-gtm-systems-lab/
 | HubSpot adapter (companies, contacts) | Implemented; unit-tested against a fake in CI; run end to end against a HubSpot test portal (opt-in live test) |
 | People Data Labs contacts | Implemented; unit-tested against a fake in CI; run end to end with HubSpot on real companies (free plan: no emails) |
 | Email finding (FullEnrich) and verification (ZeroBounce) | Implemented; unit-tested against fakes in CI; run live on three real contacts (not yet in a full run) |
-| End-to-end test on real data, with expected results | Implemented (`docs/real-case-test.md`); harness tested against fakes in CI; first real recording pending |
+| End-to-end test on real data, with expected results | Implemented (`docs/real-case-test.md`); harness tested against fakes in CI; two private cases recorded and replayed |
 | Explicit CRM setup, portal identity checked before sync | Implemented; unit-tested; checked live on a HubSpot test portal |
 | Salesforce adapter | Planned - not implemented |
 | Labeled benchmark for the LLM step | Planned - not implemented |

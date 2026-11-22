@@ -54,9 +54,9 @@ The budget is in cents, so a credit needs a value: `--email-finder-cents` (defau
 ### FullEnrich (API v2)
 
 - `POST /contact/enrich/bulk` with first name, last name, company domain and name, the LinkedIn URL when known, and `enrich_fields: ["contact.work_emails"]` only (no phone). One request per account.
-- Enrichment is asynchronous. The connector polls `GET /contact/enrich/bulk/{id}` (first after 10 s, then every 15 s, up to 5 minutes). Until it is done, FullEnrich answers 400 `error.enrichment.in_progress`.
+- Enrichment is asynchronous. The connector polls `GET /contact/enrich/bulk/{id}` (first after 10 s, then every 15 s, up to 5 minutes). Until it is done, FullEnrich answers either 400 `error.enrichment.in_progress` (documented) or 200 with status `IN_PROGRESS` (measured on a real run); both mean wait.
 - The email used is `most_probable_work_email`, which FullEnrich documents as the one with the lowest bounce rate, excluding invalid ones.
-- `CREDITS_INSUFFICIENT`, `CANCELED` or a timeout are reported as failures; any email already found is kept.
+- `CREDITS_INSUFFICIENT` (measured: HTTP 402), `CANCELED` or a timeout are reported as failures; any email already found is kept, and the account's enrichment shows `provider_failed`.
 
 ### ZeroBounce (API v2)
 

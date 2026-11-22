@@ -39,9 +39,11 @@ def _contact(first, last, email=None, url=None, verified=False):
 
 
 class FakeFullEnrich:
-    def __init__(self, emails: dict[str, tuple[str, str]], polls_before_done=1, final="FINISHED"):
+    def __init__(self, emails: dict[str, tuple[str, str]], polls_before_done=1, final="FINISHED",
+                 final_http=200, in_progress_as_200=False):
         self.emails = emails  # last_name -> (email, status)
         self.polls_before_done, self.final = polls_before_done, final
+        self.final_http, self.in_progress_as_200 = final_http, in_progress_as_200
         self.calls, self.started = [], None
 
     def __call__(self, method, url, headers, body):
@@ -54,6 +56,8 @@ class FakeFullEnrich:
         assert url == FULLENRICH_API + "/contact/enrich/bulk/e-1"
         if self.polls_before_done:
             self.polls_before_done -= 1
+            if self.in_progress_as_200:
+                return 200, {"id": "e-1", "status": "IN_PROGRESS", "cost": {"credits": 0}, "data": []}
             return 400, {"code": "error.enrichment.in_progress",
                          "message": "Enrichment not ready, try again in 30 seconds"}
         data = []
@@ -62,7 +66,7 @@ class FakeFullEnrich:
             info = {"most_probable_work_email": {"email": hit[0], "status": hit[1]}} if hit else {}
             data.append({"input": {}, "custom": item["custom"], "contact_info": info})
         found = sum(1 for d in data if d["contact_info"])
-        return 200, {"id": "e-1", "status": self.final, "cost": {"credits": found}, "data": data}
+        return self.final_http, {"id": "e-1", "status": self.final, "cost": {"credits": found}, "data": data}
 
 
 class FakeZeroBounce:
@@ -129,6 +133,16 @@ def test_fullenrich_failure_is_reported_not_raised():
     r = _finder(fake).find(_account(), [_contact("Riley", "Hall")])
     assert r.failures and "CREDITS_INSUFFICIENT" in r.failures[0]
     assert FE_KEY not in r.failures[0]
+
+
+@pytest.mark.unit
+def test_fullenrich_measured_answers_200_in_progress_then_402_out_of_credits():
+    fake = FakeFullEnrich({"hall": ("r@acme.example", "DELIVERABLE")}, polls_before_done=2,
+                          final="CREDITS_INSUFFICIENT", final_http=402, in_progress_as_200=True)
+    r = _finder(fake).find(_account(), [_contact("Riley", "Hall")])
+    assert [m for m, _ in fake.calls] == ["POST", "GET", "GET", "GET"]  # waited through IN_PROGRESS
+    assert "CREDITS_INSUFFICIENT" in r.failures[0] and "402" in r.failures[0]
+    assert r.found[0].email == "r@acme.example"  # what was found before running out is kept
 
 
 @pytest.mark.unit

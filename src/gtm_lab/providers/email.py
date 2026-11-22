@@ -203,8 +203,9 @@ class FullEnrichFinder(EmailFinder):
                 result.failures.append(
                     f"fullenrich: enrichment {state or 'failed'} (HTTP {status}{_msg(payload)})"
                 )
-                if status == 200 and isinstance(payload, dict):
-                    return payload  # e.g. CREDITS_INSUFFICIENT: keep what was found
+                # CREDITS_INSUFFICIENT came back as HTTP 402 on a real run: keep what was found.
+                if status in (200, 402) and isinstance(payload, dict) and "data" in payload:
+                    return payload
                 return None
             if waited >= self._timeout_s:
                 result.failures.append(f"fullenrich: not finished after {int(waited)}s")
