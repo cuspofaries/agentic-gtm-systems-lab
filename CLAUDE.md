@@ -23,6 +23,7 @@ Installed by `pip install -e ".[dev]"` into `.venv` (use `.venv/bin/gtm-lab` if 
 | `gtm-lab eval <run-id> [--json]` | Four integrity checks. Exit code 1 on failure. |
 | `gtm-lab approve <run-id>` | `proposed` → `approved`. Writes nothing. |
 | `gtm-lab reject <run-id> [--reason ...]` | `proposed` → `rejected`. |
+| `gtm-lab crm-setup --crm hubspot` | Prepares a HubSpot portal for writes (creates a unique custom property). State-changing, asks for confirmation. Only on explicit request. |
 | `gtm-lab sync <run-id> [--json]` | Write an approved plan to the CRM it was planned against (mock or HubSpot). Re-running is a no-op. |
 
 Read `--json` output or `inspect` instead of parsing the terminal tables.

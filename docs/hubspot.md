@@ -2,7 +2,7 @@
 
 `gtm-lab demo --crm hubspot` reconciles the plan against a real HubSpot portal, and `gtm-lab sync` then writes approved companies and contacts to it. The default stays `--crm mock`. Everything else (qualification, budget, policies, approval) is unchanged.
 
-**Use a test portal.** Create a free HubSpot account for this, not your production CRM. The connector creates a custom property on companies and contacts (see below), and that change cannot be fully undone.
+**Use a test portal.** Create a free HubSpot account for this, not your production CRM. Writing needs a custom property on companies and contacts, created once by an explicit command (`gtm-lab crm-setup`), never implicitly; its unique flag cannot be undone.
 
 ## Setup
 
@@ -14,6 +14,10 @@
    ```
 4. If the portal has GDPR features on, contacts need a legal basis. Set it in `gtm-context.yaml` (see [Legal basis](#legal-basis)).
 5. Recommended for the synthetic demo: turn off **"Create and associate companies with contacts"** (Settings → Objects → Companies). See [Known HubSpot behaviors](#known-hubspot-behaviors).
+6. Prepare the portal once. It shows the portal and what it will create, then asks:
+   ```bash
+   gtm-lab crm-setup --crm hubspot
+   ```
 
 ## Run
 
@@ -26,12 +30,15 @@ gtm-lab sync <run-id>               # second run: no-ops only
 
 `sync` uses the CRM recorded on the plan. A plan made against the mock can never be synced to HubSpot, and the reverse is also true.
 
+The plan also records **which portal** it was made against (`hubspot:<portalId>`, read from the token). Before writing, `sync` reads the portal again and refuses if the token now points elsewhere, and refuses if the portal was not prepared with `crm-setup`.
+
 ## What the connector does
 
 | Step | HubSpot calls |
 |---|---|
 | Plan | Search companies by domain. Read-only, no schema change. |
-| First write | Create the `gtm_lab_external_ref` property on companies and contacts if missing, with `hasUniqueValue: true`. |
+| `crm-setup` (explicit, once) | Create the `gtm_lab_external_ref` property on companies and contacts if missing, with `hasUniqueValue: true`. |
+| Before sync | Read the portal id and check that the property exists. Read-only. |
 | Sync, per account | Look up by `gtm_lab_external_ref` (already written → no-op), search by domain (owned by someone else → `stale_plan`), then create the company. |
 | Sync, per contact | Look up by ref, then create the contact with `hs_legal_basis` if configured and an association to its company (type 279). |
 
@@ -41,6 +48,10 @@ All calls use HubSpot's dated API version `2026-09`, through the Python standard
 
 The `gtm_lab_external_ref` property is unique in HubSpot: a second record with the same value is rejected (400 `VALIDATION_ERROR`). Every write carries a ref derived from the run and the account, so a retried or concurrent sync cannot create the same record twice, even if a lookup misses.
 
+
+### What idempotency does not cover
+
+The external ref is built from the run and the account, so it stops **the same run** from writing a record twice, including retries and concurrent syncs of that run. It does not link two different runs, or another tool, that write the same company: those are separated only by the domain search before each create, and HubSpot's search lags writes by a few seconds. Two runs syncing the same new company within that window can both create it. Run one sync at a time per portal.
 ## Legal basis
 
 Portals with GDPR enabled reject contacts without `hs_legal_basis`. The value is a compliance decision, so there is no default:

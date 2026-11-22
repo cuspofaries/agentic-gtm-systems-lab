@@ -255,7 +255,7 @@ def demo(
                 pl = ev["payload"]
                 cmp.add_row(pl["account_id"], pl["baseline_decision"], pl["fallback_decision"])
         console.print(cmp)
-        console.print(f"LLM calls: {provider.calls} · estimated spend: {provider.spent_cents}¢"
+        console.print(f"LLM calls: {provider.calls} · spend: {provider.spent_cents}¢"
                       + (f" · errors: {provider.errors}" if provider.errors else ""))
 
 
@@ -383,7 +383,10 @@ def sync(
     if before == "rejected":
         _fail(f"Run {run_id} was rejected; it cannot be synced.")
     wf = _sync_workflow(example_dir, state_dir, target)
-    results = wf.sync(run_id)
+    try:
+        results = wf.sync(run_id)
+    except (ValueError, CRMError) as e:
+        _fail(str(e))
     after = wf.store.load_plan(run_id).status.value
     counts = {k: sum(1 for r in results if r.outcome == k)
               for k in ("ok", "idempotent_noop", "failed", "stale_plan")}
@@ -399,6 +402,36 @@ def sync(
     console.print(f"Sync complete: {counts['ok']} ok · {counts['failed']} failed · "
                   f"{counts['idempotent_noop']} noop · {counts['stale_plan']} stale")
     console.print_json(data=[json.loads(r.model_dump_json()) for r in results[:20]], default=str)
+
+
+@app.command("crm-setup")
+def crm_setup(
+    crm: str = typer.Option("hubspot", "--crm", help="CRM to prepare. Only hubspot needs it."),
+    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation."),
+):
+    """Prepare a real CRM for writes (creates the idempotency property). Explicit, one time."""
+    if crm != "hubspot":
+        _fail(f"Nothing to set up for '{crm}'.")
+    token = next((os.environ[v] for v in HUBSPOT_TOKEN_VARS if os.environ.get(v)), None)
+    if not token:
+        _fail("No HubSpot token found.", f"Export {HUBSPOT_TOKEN_VARS[0]}.")
+    hs = HubSpotCRM(token)
+    try:
+        portal = hs.identity()
+        missing = hs.missing_schema()
+    except CRMError as e:
+        _fail(str(e))
+    if not missing:
+        console.print(f"{portal}: already set up, nothing to do.")
+        return
+    console.print(f"Portal: [bold]{portal}[/bold]")
+    console.print(f"Will create a custom property 'gtm_lab_external_ref' on: {', '.join(missing)}.")
+    console.print("It is marked unique (hasUniqueValue), which HubSpot does not let you undo; "
+                  "the property itself can be deleted later from HubSpot settings.")
+    if not yes and not typer.confirm("Create it?", default=False):
+        _fail("Cancelled; nothing changed.")
+    created = hs.ensure_schema()
+    console.print(f"[green]Done.[/green] Created on: {', '.join(created) or 'nothing'}.")
 
 
 if __name__ == "__main__":

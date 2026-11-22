@@ -35,7 +35,7 @@ def _parsed(**over):
     base = dict(
         decision="qualified",
         explanation="Fits.",
-        evidence=["industry: B2B SaaS Software", "hq_country: US"],
+        evidence=[{"field": "industry", "value": "B2B SaaS Software"}, {"field": "hq_country", "value": "US"}],
         missing=["employees"],
         confidence=0.6,
     )
@@ -66,19 +66,40 @@ def test_fallback_only_sees_insufficient_evidence_cases(make_workflow):
 
 
 @pytest.mark.unit
-def test_llm_qualified_entry_still_goes_through_policies(make_workflow):
-    """An LLM 'qualified' with ungrounded evidence must not become approvable."""
+def test_llm_evidence_not_in_the_account_is_rejected(make_workflow):
+    """A 'qualified' backed by invented or free-text evidence must not reach the plan."""
 
     def provider(_a, _c):
         return {"decision": "qualified", "explanation": "trust me",
-                "evidence": ["great culture fit", "founder is friendly"], "missing": [],
-                "confidence": 0.99}
+                "evidence": ["great culture fit",                         # free text
+                             {"field": "employees", "value": "150"},       # acc_005 has none
+                             {"field": "industry", "value": "fintech"}],   # not what it says
+                "missing": [], "confidence": 0.99}
 
     wf = make_workflow(fallback_qualifier=LLMQualifier(provider_call=provider))
     plan = wf.plan(limit=50)
-    entry = next(e for e in plan.entries if e.account_id == "acc_005")
-    assert entry.policy_failures
-    assert entry not in plan.approvable_entries
+    d = next(d for d in wf.store.load_decisions(plan.run_id) if d.account_id == "acc_005")
+    assert d.decision == "insufficient_evidence"
+    assert d.missing == ["llm_evidence_ungrounded"]
+    assert all(e.account_id != "acc_005" for e in plan.entries)
+
+
+@pytest.mark.unit
+def test_llm_evidence_matching_the_account_is_kept(make_workflow):
+    def provider(_a, _c):
+        return {"decision": "qualified", "explanation": "US SaaS, size unknown",
+                "evidence": [{"field": "hq_country", "value": "US"},
+                             {"field": "industry", "value": "b2b saas"},
+                             {"field": "employees", "value": "120"}],  # invented: dropped
+                "missing": ["employees"], "confidence": 0.6}
+
+    wf = make_workflow(fallback_qualifier=LLMQualifier(provider_call=provider))
+    plan = wf.plan(limit=50)
+    d = next(d for d in wf.store.load_decisions(plan.run_id) if d.account_id == "acc_005")
+    assert d.decision == "qualified" and d.decided_by == "llm"
+    assert d.evidence == ["hq_country: US (checked against account data)",
+                          "industry: b2b saas (checked against account data)"]
+    assert "llm_evidence_partly_ungrounded" in d.missing
 
 
 @pytest.mark.unit
@@ -105,13 +126,27 @@ def test_provider_call_cap_is_enforced_in_code():
 
 
 @pytest.mark.unit
-def test_provider_spend_cap_is_enforced_in_code():
-    p = AnthropicProviderCall(
-        client=_client(parsed=_parsed(), input_tokens=1_000_000), max_spend_cents=3
-    )
-    p("{}", {})  # costs $4 -> 400 cents, over the cap
+def test_provider_refuses_a_call_whose_worst_case_exceeds_the_cap():
+    p = AnthropicProviderCall(client=_client(parsed=_parsed()), max_spend_cents=3)
     out = p("{}", {})
-    assert out["missing"] == ["llm_budget_exhausted"]
+    assert out["missing"] == ["llm_budget_would_exceed"]
+    assert p.client.messages.calls == []  # refused before any request
+    assert p.worst_case_cents(1000) > 3
+
+
+@pytest.mark.unit
+def test_spend_never_exceeds_the_cap_across_calls():
+    p = AnthropicProviderCall(client=_client(parsed=_parsed()), max_spend_cents=20, max_calls=50)
+    for _ in range(50):
+        p("{}", {})
+    assert p.spent_cents <= 20
+    assert p.spent_cents + p.worst_case_cents(1000) > 20  # stopped because the next could overshoot
+
+
+@pytest.mark.unit
+def test_output_cap_hit_fails_closed():
+    p = AnthropicProviderCall(client=_client(stop_reason="max_tokens", parsed=None))
+    assert p("{}", {})["missing"] == ["llm_output_truncated"]
 
 
 @pytest.mark.unit

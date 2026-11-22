@@ -89,7 +89,7 @@ State the evidence for each finding. Never modify state to fix it.
 
 ## HubSpot
 
-`gtm-lab demo --crm hubspot` reconciles against a real HubSpot portal and needs `HUBSPOT_SERVICE_KEY`. Run it only if the user asks for it. Planning only reads HubSpot; the sync of an approved HubSpot plan writes to it. See `docs/hubspot.md`.
+`gtm-lab demo --crm hubspot` reconciles against a real HubSpot portal and needs `HUBSPOT_SERVICE_KEY`. Run it only if the user asks for it. Planning only reads HubSpot; the sync of an approved HubSpot plan writes to it. A portal must first be prepared with `gtm-lab crm-setup --crm hubspot`, which changes its schema: run it only when the user asks, after saying what it creates. If `sync` refuses because the portal changed or is not prepared, report that; do not work around it. See `docs/hubspot.md`.
 
 `--discovery pdl` and `--enrichment pdl` call People Data Labs and spend the user's credits (1 per company or person returned). Use them only on explicit request, and say how many credits the run can spend (`--limit` companies, `--profiles-per-account` per account) before running. See `docs/pdl.md`.
 

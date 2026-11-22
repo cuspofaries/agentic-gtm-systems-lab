@@ -148,7 +148,7 @@ gtm-lab demo --agentic --max-llm-calls 5 --max-llm-cents 50
 
 Claude (`claude-opus-5-5`) is consulted for one thing only: accounts the rules returned as `insufficient_evidence`. Everything around that call is code:
 
-- hard caps on the number of calls and on estimated spend, checked before each call;
+- hard caps on the number of calls and on spend: a call starts only if its worst-case cost still fits;
 - account data is sent as untrusted data inside an `<account_data>` block;
 - the answer comes back as structured output and is validated; a refusal, an API error or a cap hit becomes `insufficient_evidence`;
 - an LLM `qualified` still goes through the same policy checks, so evidence that does not point at an observable field blocks approval;
@@ -193,9 +193,10 @@ A HubSpot adapter ships: `gtm-lab demo --crm hubspot`, then approve and sync as 
 
 ## What are the limitations?
 
-- **Offline demo only out of the box.** No live provider adapter is bundled. The brief says this is intentional - the point is the pipeline shape, not vendor lock-in.
+- **Offline by default.** The demo uses fixtures and a mock CRM; real providers (HubSpot, People Data Labs) are opt-in flags.
 - **The agentic path has not been run against the live API in CI.** It is unit-tested with a fake client. There is no labeled benchmark yet, so the LLM-vs-baseline comparison shows agreement, not accuracy.
-- **Real providers: HubSpot (CRM) and People Data Labs (companies, contacts).** Salesforce is not implemented. On PDL's free plan, contacts come without emails. HubSpot's search lag leaves a few-second race against other writers (see `docs/hubspot.md`).
+- **Real providers: HubSpot (CRM) and People Data Labs (companies, contacts).** Salesforce is not implemented. On PDL's free plan, contacts come without emails.
+- **Idempotency is per run, not universal.** Retrying or re-syncing a run never duplicates. Two different runs (or another tool) writing the same new company are separated only by a domain search, and HubSpot's search lags writes by a few seconds: run one sync at a time per portal (see `docs/hubspot.md`).
 - **No multi-tenant state.** One SQLite file per workflow run.
 - **No scheduler / queue.** `gtm-lab` is CLI-driven; you orchestrate when it runs.
 

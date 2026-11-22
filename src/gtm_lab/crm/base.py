@@ -24,6 +24,15 @@ class CRMError(Exception):
 class CRMAdapter(ABC):
     name: str = "crm"  # recorded on each plan; sync refuses a plan built against another CRM
 
+    def identity(self) -> str:
+        """Which CRM instance this adapter talks to (e.g. one HubSpot portal). Recorded on the
+        plan and checked again before any write, so a changed token cannot redirect a sync."""
+        return self.name
+
+    def check_ready(self) -> None:  # noqa: B027 - optional hook, no-op for CRMs without setup
+        """Raise CRMError(retriable=False) if the CRM is not prepared for writes.
+        Read-only: preparing it is an explicit, separate step (`gtm-lab crm-setup`)."""
+
     @abstractmethod
     def find_accounts_by_domain(self, domain: str) -> list[CRMAccount]: ...
 

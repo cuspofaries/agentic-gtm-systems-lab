@@ -213,8 +213,19 @@ class LLMQualifier:
                 confidence=0.0,
                 decided_by=self.name,
             )
-        evidence = [str(x) for x in raw.get("evidence", [])]
+        evidence, ungrounded = _ground_evidence(raw.get("evidence", []), account)
         if decision == "qualified" and not evidence:
+            if ungrounded:
+                return QualificationDecision(
+                    account_id=account.account_id,
+                    decision="insufficient_evidence",
+                    explanation="LLM said 'qualified' but none of its evidence matches the "
+                    "account data; rejected.",
+                    evidence=[],
+                    missing=["llm_evidence_ungrounded"],
+                    confidence=0.0,
+                    decided_by=self.name,
+                )
             return QualificationDecision(
                 account_id=account.account_id,
                 decision="insufficient_evidence",
@@ -229,7 +240,42 @@ class LLMQualifier:
             decision=decision,
             explanation=str(raw.get("explanation", ""))[:1000],
             evidence=evidence[:20],
-            missing=[str(x) for x in raw.get("missing", [])][:20],
+            missing=([str(x) for x in raw.get("missing", [])]
+                     + (["llm_evidence_partly_ungrounded"] if ungrounded else []))[:20],
             confidence=float(raw.get("confidence", 0.5)),
             decided_by=self.name,
         )
+
+
+OBSERVABLE_FIELDS = ("industry", "employees", "hq_country", "hq_state", "domain", "signals")
+
+
+def _ground_evidence(items, account: Account) -> tuple[list[str], int]:
+    """Keep only evidence whose value is actually in the account; return (kept, dropped).
+
+    LLM evidence must be structured as {"field": ..., "value": ...}. Free text, unknown
+    fields and values the account does not hold are dropped, not trusted.
+    """
+    kept, dropped = [], 0
+    for item in items or []:
+        if not isinstance(item, dict):
+            dropped += 1
+            continue
+        field, value = item.get("field"), str(item.get("value", "")).strip()
+        if field not in OBSERVABLE_FIELDS or not value:
+            dropped += 1
+            continue
+        if field == "signals":
+            haystack = " ".join(f"{s.kind} {s.description}" for s in account.signals).lower()
+            ok = bool(account.signals) and value.lower() in haystack
+        elif field == "employees":
+            digits = "".join(ch for ch in value if ch.isdigit())
+            ok = account.employees is not None and digits == str(account.employees)
+        else:
+            actual = getattr(account, field) or ""
+            ok = bool(actual) and value.lower() in str(actual).lower()
+        if ok:
+            kept.append(f"{field}: {value} (checked against account data)")
+        else:
+            dropped += 1
+    return kept[:20], dropped

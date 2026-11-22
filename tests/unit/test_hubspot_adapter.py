@@ -23,7 +23,7 @@ TOKEN = "pat-test-not-a-real-token"
 
 
 class FakeHubSpot:
-    def __init__(self, *, require_legal_basis=False, search_lag=False):
+    def __init__(self, *, require_legal_basis=False, search_lag=False, schema_ready=True):
         self.companies: dict[str, dict] = {}
         self.contacts: dict[str, dict] = {}
         self.assoc: dict[str, list[str]] = {}
@@ -33,6 +33,9 @@ class FakeHubSpot:
         self.calls: list[SimpleNamespace] = []
         self.fail_next: list[int] = []
         self._next = 1000
+        self.portal_id = 111
+        if schema_ready:
+            self.properties = {("companies", REF_PROPERTY), ("contacts", REF_PROPERTY)}
 
     def __call__(self, method, url, headers, body):
         assert headers["Authorization"] == f"Bearer {TOKEN}"
@@ -45,6 +48,8 @@ class FakeHubSpot:
             return code, {"message": "boom", "category": "X"}, {"Retry-After": "0"}
         parts = path.strip("/").split("/")
 
+        if parts[:2] == ["account-info", "v3"]:
+            return 200, {"portalId": self.portal_id, "accountType": "STANDARD"}, {}
         if parts[:2] == ["crm", "properties"]:
             obj = parts[3]
             if method == "GET":
@@ -103,7 +108,7 @@ def _contact(email="riley.hall@example.com"):
 
 @pytest.mark.unit
 def test_planning_reads_do_not_touch_the_schema():
-    fake = FakeHubSpot()
+    fake = FakeHubSpot(schema_ready=False)
     _crm(fake).find_accounts_by_domain("HTTPS://www.Brightpath.saas.example/")
     assert [c.method for c in fake.calls] == ["POST"]
     assert fake.calls[0].path.endswith("/companies/search")
@@ -113,15 +118,48 @@ def test_planning_reads_do_not_touch_the_schema():
 
 
 @pytest.mark.unit
-def test_first_write_creates_unique_ref_property_once():
-    fake = FakeHubSpot()
+def test_writes_never_create_the_schema():
+    fake = FakeHubSpot(schema_ready=False)
     crm = _crm(fake)
-    crm.create_account(domain="a.example", name="A", source="run", external_ref="r1")
-    crm.create_account(domain="b.example", name="B", source="run", external_ref="r2")
-    assert fake.properties == {("companies", REF_PROPERTY), ("contacts", REF_PROPERTY)}
+    with pytest.raises(CRMError, match="crm-setup") as exc:
+        crm.create_account(domain="a.example", name="A", source="run", external_ref="r1")
+    assert exc.value.retriable is False
+    assert fake.properties == set() and fake.companies == {}
+    assert not [c for c in fake.calls if c.path.startswith("/crm/properties") and c.method == "POST"]
+
+
+@pytest.mark.unit
+def test_explicit_setup_creates_unique_property_once():
+    fake = FakeHubSpot(schema_ready=False)
+    crm = _crm(fake)
+    assert crm.ensure_schema() == ["companies", "contacts"]
+    assert crm.ensure_schema() == []
     creates = [c for c in fake.calls if c.path.startswith("/crm/properties") and c.method == "POST"]
-    assert len(creates) == 2
-    assert all(c.body["hasUniqueValue"] is True for c in creates)
+    assert len(creates) == 2 and all(c.body["hasUniqueValue"] is True for c in creates)
+
+
+@pytest.mark.unit
+def test_identity_is_the_portal():
+    assert _crm(FakeHubSpot()).identity() == "hubspot:111"
+
+
+@pytest.mark.unit
+def test_sync_refuses_a_plan_made_against_another_portal(make_workflow):
+    from gtm_lab.models import WritePlanStatus
+
+    wf = make_workflow()
+    plan = wf.plan(limit=50)
+    wf.approve(plan.run_id)
+    stored = wf.store.load_plan(plan.run_id)
+    stored.crm_target, stored.crm_identity = "hubspot", "hubspot:111"
+    stored.status = WritePlanStatus.APPROVED
+    wf.store.save_plan(stored)
+    other = FakeHubSpot()
+    other.portal_id = 222
+    wf.crm = _crm(other)
+    with pytest.raises(ValueError, match=r"hubspot:111.*hubspot:222"):
+        wf.sync(plan.run_id)
+    assert other.companies == {}
 
 
 @pytest.mark.unit
@@ -138,7 +176,6 @@ def test_create_account_is_idempotent_on_ref():
 def test_ref_conflict_from_a_race_returns_the_existing_record():
     fake = FakeHubSpot()
     crm = _crm(fake)
-    crm.ensure_schema()
     fake.companies["9"] = {"id": "9", "properties": {"domain": "zz.example", REF_PROPERTY: "r1"}}
     # Make the pre-check miss it once, as a concurrent writer would, so the POST hits the 400.
     original = crm.find_account_by_external_ref

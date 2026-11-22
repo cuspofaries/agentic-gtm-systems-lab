@@ -109,8 +109,9 @@ Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
 | `demo` | `--title-levels` | empty | `pdl` only: comma-separated `job_title_levels` to keep, e.g. `cxo,vp,director`. |
 | `demo`, `runs`, `eval`, `sync` | `--json` | off | Structured output instead of tables. |
 | `demo` | `--max-llm-calls` | `5` | Agentic mode only. Hard cap on LLM calls per run. Past the cap, accounts stay `insufficient_evidence`. |
-| `demo` | `--max-llm-cents` | `50` | Agentic mode only. Cap on estimated LLM spend per run, in cents, computed from the token usage of each response. It is checked before each call, so the call that crosses it still completes; no call starts once it is reached. |
+| `demo` | `--max-llm-cents` | `50` | Agentic mode only. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |
 | `demo`, `approve`, `reject`, `sync` | `--example-dir` | bundled example | Directory containing `config/gtm-context.yaml` and `fixtures/`. Point it at your own copy to use your own context and fixtures. |
+| `crm-setup` | `--crm`, `--yes` | `hubspot`, off | Prepares a real CRM for writes (creates the idempotency property). Asks for confirmation unless `--yes`. |
 | all commands | `--state-dir` | `./.gtm-lab-state` | Where run state, the mock CRM, the event log and review artifacts are written. |
 | `reject` | `--reason` | empty | Free-text reason stored in the event log (first 500 characters). |
 | `eval`, `inspect`, `approve`, `reject`, `sync` | `RUN_ID` (argument) | required | The run to act on. `gtm-lab runs` lists them. |
@@ -154,7 +155,7 @@ These are not exposed as config yet. Changing them means editing the code.
 | LLM model | `agents/anthropic_provider.py`, `DEFAULT_MODEL` | `claude-opus-5-5` | Model used in agentic mode. |
 | LLM price table | `agents/anthropic_provider.py`, `PRICE_PER_MTOK` | $4 input / $20 output per million tokens | Only used to enforce `--max-llm-cents`. Update it if prices change. |
 | LLM effort | `agents/anthropic_provider.py` | `low` | Reasoning depth for the qualification call. |
-| LLM max output tokens | `agents/anthropic_provider.py` | `16000` | Per-call output limit. |
+| LLM max output tokens | `agents/anthropic_provider.py`, `MAX_OUTPUT_TOKENS` | `4000` | Per-call output limit, thinking included. Also bounds the worst-case cost checked before each call. An answer that hits it is treated as no answer. |
 | LLM output truncation | `agents/qualifier.py` | explanation 1000 chars, 20 evidence items, 20 missing items | Applied to every LLM answer before it is stored. |
 
 ---

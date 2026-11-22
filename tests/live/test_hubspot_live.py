@@ -56,6 +56,7 @@ def test_plan_approve_sync_resync_and_stale_plan_against_hubspot(context, tmp_pa
     from tests.conftest import EXAMPLE_DIR
 
     crm = HubSpotCRM(TOKEN, contact_legal_basis=context.crm.hubspot_contact_legal_basis)
+    crm.ensure_schema()  # the explicit setup step; a no-op on an already prepared portal
     wf = AccountDiscoveryWorkflow(
         context=context,
         discovery=FixtureDiscoveryProvider(EXAMPLE_DIR / "fixtures" / "discovery.yaml"),

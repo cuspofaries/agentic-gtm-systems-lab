@@ -324,6 +324,7 @@ class AccountDiscoveryWorkflow:
             enrichment_budget_cents=budget.cap_cents,
             enrichment_spent_cents=budget.spent_cents,
             crm_target=self.crm.name,
+            crm_identity=self.crm.identity(),
         )
         self.store.save_plan(plan)
         self.recorder.record(
@@ -386,6 +387,18 @@ class AccountDiscoveryWorkflow:
                 f"Plan {run_id} was reconciled against the '{plan.crm_target}' CRM; "
                 f"refusing to sync it to '{self.crm.name}'. Re-plan against '{self.crm.name}'."
             )
+        current = self.crm.identity()
+        if plan.crm_identity is None and self.crm.name != "mock":
+            raise ValueError(
+                f"Plan {run_id} does not record which {self.crm.name} instance it was made "
+                f"against; refusing to write to {current}. Re-plan."
+            )
+        if plan.crm_identity is not None and plan.crm_identity != current:
+            raise ValueError(
+                f"Plan {run_id} was made against {plan.crm_identity} but the credentials now "
+                f"point to {current}; refusing to write. Re-plan against {current}."
+            )
+        self.crm.check_ready()
 
         accounts = {a.account_id: a for a in self.store.load_accounts(run_id)}
         results: list[WriteOperationResult] = []

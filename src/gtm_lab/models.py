@@ -180,6 +180,9 @@ class WritePlan(BaseModel):
     # Which CRM the plan was reconciled against. Plans saved before this field existed
     # load as "mock", which is the only CRM they could have used.
     crm_target: str = "mock"
+    # Which instance of that CRM (e.g. "hubspot:12345678"). None on plans made before it
+    # was recorded; such plans can only be synced to the mock.
+    crm_identity: str | None = None
 
     @property
     def approvable_entries(self) -> list[WritePlanEntry]:

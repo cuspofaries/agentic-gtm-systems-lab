@@ -49,7 +49,7 @@ def _gtm_lab_invocations(text: str) -> list[tuple[str, list[str]]]:
     Skill invocations such as `/gtm-lab explain` are not CLI calls and are skipped.
     """
     out = []
-    pattern = r"(?:(?<=[\s`(])|^)(?:\.venv/bin/)?gtm-lab ([a-z]+)([^`)\n]*)"
+    pattern = r"(?:(?<=[\s`(])|^)(?:\.venv/bin/)?gtm-lab ([a-z][a-z-]*)([^`)\n]*)"
     for m in re.finditer(pattern, text, re.M):
         out.append((m.group(1), re.findall(r"--[a-z][a-z-]*", m.group(2))))
     return out

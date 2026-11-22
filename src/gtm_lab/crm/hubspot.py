@@ -11,8 +11,10 @@ Behavior measured on a HubSpot test portal (API version 2026-09), not assumed:
   someone else in that window can be missed by the domain check. The external-ref lookup
   is a direct read and does not lag.
 - Idempotency uses a custom property `gtm_lab_external_ref` with `hasUniqueValue: true`,
-  created on first write. HubSpot then rejects a second record with the same value
-  (400 VALIDATION_ERROR), so a retried write can never create a duplicate.
+  created only by `ensure_schema()` (the explicit `gtm-lab crm-setup` command). HubSpot
+  then rejects a second record with the same value (400 VALIDATION_ERROR), so a retried
+  write of the same run can never create a duplicate. Two different runs use different
+  refs; between them only the domain check (and its lag) applies.
 - Portals with GDPR enabled require `hs_legal_basis` on contacts. It comes from
   `crm.hubspot_contact_legal_basis` in the GTM context; there is no default.
 - Emails on `.invalid` are rejected by HubSpot.
@@ -82,6 +84,7 @@ class HubSpotCRM(CRMAdapter):
         self._transport = transport
         self._sleep = sleep
         self._schema_ready = False
+        self._identity: str | None = None
 
     # --- HTTP -----------------------------------------------------------------
 
@@ -110,19 +113,47 @@ class HubSpotCRM(CRMAdapter):
     def _objects(self, obj: str) -> str:
         return f"/crm/objects/{API_VERSION}/{obj}"
 
-    # --- schema ---------------------------------------------------------------
+    # --- identity and schema ----------------------------------------------------
 
-    def ensure_schema(self) -> None:
-        """Create the unique external-ref property on companies and contacts if missing.
+    def identity(self) -> str:
+        """`hubspot:<portalId>`, read from the account the token belongs to."""
+        if self._identity is None:
+            info = self._call("GET", "/account-info/v3/details")
+            self._identity = f"hubspot:{info['portalId']}"
+        return self._identity
 
-        This changes the portal's schema, and `hasUniqueValue` cannot be undone, so it is
-        only called on the write path (after approval), never while planning.
-        """
+    def missing_schema(self) -> list[str]:
+        """Objects lacking the unique external-ref property. Read-only."""
+        missing = []
+        for obj in PROPERTY_GROUPS:
+            path = f"/crm/properties/{API_VERSION}/{obj}/{REF_PROPERTY}"
+            if self._call("GET", path, ok404=True) is None:
+                missing.append(obj)
+        return missing
+
+    def check_ready(self) -> None:
         if self._schema_ready:
             return
+        missing = self.missing_schema()
+        if missing:
+            raise CRMError(
+                f"HubSpot portal {self.identity()} has no '{REF_PROPERTY}' property on "
+                f"{', '.join(missing)}. Run `gtm-lab crm-setup --crm hubspot` first.",
+                retriable=False,
+            )
+        self._schema_ready = True
+
+    def ensure_schema(self) -> list[str]:
+        """Create the unique external-ref property where missing; return what was created.
+
+        This changes the portal's schema and `hasUniqueValue` cannot be undone, so it is only
+        called by the explicit `gtm-lab crm-setup` command, never by planning or syncing.
+        """
+        created = []
         for obj, group in PROPERTY_GROUPS.items():
             path = f"/crm/properties/{API_VERSION}/{obj}"
             if self._call("GET", f"{path}/{REF_PROPERTY}", ok404=True) is None:
+                created.append(obj)
                 self._call(
                     "POST",
                     path,
@@ -137,6 +168,7 @@ class HubSpotCRM(CRMAdapter):
                     },
                 )
         self._schema_ready = True
+        return created
 
     # --- reads ----------------------------------------------------------------
 
@@ -156,7 +188,7 @@ class HubSpotCRM(CRMAdapter):
         return [self._to_account(r) for r in (payload or {}).get("results", [])]
 
     def find_account_by_external_ref(self, external_ref: str) -> CRMAccount | None:
-        self.ensure_schema()
+        self.check_ready()
         r = self._call(
             "GET",
             f"{self._objects('companies')}/{_q(external_ref)}"
@@ -166,7 +198,7 @@ class HubSpotCRM(CRMAdapter):
         return self._to_account(r) if r else None
 
     def find_contact_by_external_ref(self, external_ref: str) -> CRMContact | None:
-        self.ensure_schema()
+        self.check_ready()
         r = self._call(
             "GET",
             f"{self._objects('contacts')}/{_q(external_ref)}"
@@ -208,7 +240,7 @@ class HubSpotCRM(CRMAdapter):
     def create_account(
         self, *, domain: str, name: str, source: str, external_ref: str
     ) -> CRMAccount:
-        self.ensure_schema()
+        self.check_ready()
         existing = self.find_account_by_external_ref(external_ref)
         if existing:
             return existing
@@ -237,7 +269,7 @@ class HubSpotCRM(CRMAdapter):
     def create_contact(
         self, proposal: ContactProposal, *, crm_account_id: str, external_ref: str
     ) -> CRMContact:
-        self.ensure_schema()
+        self.check_ready()
         existing = self.find_contact_by_external_ref(external_ref)
         if existing:
             return existing
