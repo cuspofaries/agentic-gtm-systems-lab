@@ -51,8 +51,12 @@ def render_review(plan: WritePlan, store: RunStore) -> str:
                 lines.append("- Contacts to create:")
                 for c in e.contacts_to_create:
                     verif = "✓" if c.verified else "?"
+                    email = c.email or "-"
+                    if c.email_status:
+                        email += f" ({c.email_status})"
+                    checks = f" · checks: {', '.join(c.email_checks)}" if c.email_checks else ""
                     lines.append(f"  - {verif} {c.first_name or ''} {c.last_name or ''}"
-                                 f" ({c.persona}) · email: {c.email or '-'}")
+                                 f" ({c.persona}) · email: {email}{checks}")
             else:
                 why = {
                     "budget_exceeded": "enrichment skipped: budget cap reached",

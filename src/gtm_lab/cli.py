@@ -74,6 +74,32 @@ def _make_enrichment(enrichment: str, ctx, example_dir: Path, profiles_per_accou
     _fail(f"Unknown enrichment provider '{enrichment}'. Use 'fixture' or 'pdl'.")
 
 
+def _wrap_emails(base, ctx, finder: str, verifier: str, max_contacts: int,
+                 finder_cents: int, verifier_cents: int):
+    """Add email finding and/or verification after contact enrichment, if asked."""
+    if finder == "none" and verifier == "none":
+        return base
+    from .providers.email import EmailPipeline, FullEnrichFinder, ZeroBounceVerifier
+
+    f = v = None
+    if finder == "fullenrich":
+        key = os.environ.get("FULLENRICH_API_KEY")
+        if not key:
+            _fail("FullEnrich selected but FULLENRICH_API_KEY is not set.")
+        f = FullEnrichFinder(key, cents_per_credit=finder_cents)
+    elif finder != "none":
+        _fail(f"Unknown email finder '{finder}'. Use 'none' or 'fullenrich'.")
+    if verifier == "zerobounce":
+        key = os.environ.get("ZEROBOUNCE_API_KEY")
+        if not key:
+            _fail("ZeroBounce selected but ZEROBOUNCE_API_KEY is not set.")
+        v = ZeroBounceVerifier(key, cents_per_credit=verifier_cents)
+    elif verifier != "none":
+        _fail(f"Unknown email verifier '{verifier}'. Use 'none' or 'zerobounce'.")
+    return EmailPipeline(base, finder=f, verifier=v, max_contacts_per_call=max_contacts,
+                         on_unverified=ctx.contacts.on_unverified_email)
+
+
 def _make_discovery(discovery: str, ctx, example_dir: Path):
     if discovery == "fixture":
         return FixtureDiscoveryProvider(example_dir / "fixtures" / "discovery.yaml")
@@ -94,13 +120,21 @@ def _build_workflow(
     enrichment: str = "fixture",
     profiles_per_account: int = 2,
     title_levels: list[str] | None = None,
+    email_finder: str = "none",
+    email_verifier: str = "none",
+    email_finder_cents: int = 10,
+    email_verifier_cents: int = 2,
 ) -> AccountDiscoveryWorkflow:
     state_dir.mkdir(parents=True, exist_ok=True)
     ctx = load_context(example_dir / "config" / "gtm-context.yaml")
     return AccountDiscoveryWorkflow(
         context=ctx,
         discovery=_make_discovery(discovery, ctx, example_dir),
-        enrichment=_make_enrichment(enrichment, ctx, example_dir, profiles_per_account, title_levels),
+        enrichment=_wrap_emails(
+            _make_enrichment(enrichment, ctx, example_dir, profiles_per_account, title_levels),
+            ctx, email_finder, email_verifier, profiles_per_account,
+            email_finder_cents, email_verifier_cents,
+        ),
         crm=_make_crm(crm, ctx, state_dir),
         store=RunStore(state_dir / "runs.sqlite"),
         recorder=EventRecorder(state_dir / "events.jsonl"),
@@ -172,6 +206,10 @@ def demo(
     enrichment: str = typer.Option("fixture", "--enrichment", help="Contact provider: fixture (default) or pdl."),
     profiles_per_account: int = typer.Option(2, "--profiles-per-account", help="pdl only: max contacts fetched per account."),
     title_levels: str = typer.Option("", "--title-levels", help="pdl only: comma-separated job_title_levels to keep, e.g. cxo,vp,director."),
+    email_finder: str = typer.Option("none", "--email-finder", help="Find missing work emails: none (default) or fullenrich."),
+    email_verifier: str = typer.Option("none", "--email-verifier", help="Check every email: none (default) or zerobounce."),
+    email_finder_cents: int = typer.Option(10, "--email-finder-cents", help="Budget value of one finder credit, in cents. Set it to your plan's price."),
+    email_verifier_cents: int = typer.Option(2, "--email-verifier-cents", help="Budget value of one verifier credit, in cents. Set it to your plan's price."),
 ):
     """Run the demo end to end. Stops at the human approval gate - no CRM writes."""
     out = err_console if as_json else console
@@ -197,8 +235,10 @@ def demo(
 
     wf = _build_workflow(example_dir, state_dir, fallback_qualifier=fallback, crm=crm,
                          discovery=discovery, enrichment=enrichment, profiles_per_account=profiles_per_account,
-                         title_levels=[x.strip() for x in title_levels.split(",") if x.strip()] or None)
-    if enrichment != "fixture":
+                         title_levels=[x.strip() for x in title_levels.split(",") if x.strip()] or None,
+                         email_finder=email_finder, email_verifier=email_verifier,
+                         email_finder_cents=email_finder_cents, email_verifier_cents=email_verifier_cents)
+    if enrichment != "fixture" or email_finder != "none" or email_verifier != "none":
         out.print(f"[cyan]Enrichment:[/cyan] {wf.enrichment.name}, up to "
                   f"{wf.enrichment.max_cost_cents_per_call}¢ per account, "
                   f"budget {wf.context.policy.enrichment_budget_cents}¢.")

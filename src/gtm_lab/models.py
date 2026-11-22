@@ -128,7 +128,10 @@ class ContactProposal(BaseModel):
     last_name: str | None
     title: str | None
     email: str | None  # may be masked / synthetic / unverified
-    verified: bool = False
+    verified: bool = False  # True only when a provider or a verifier confirmed the email
+    # Normalized verdict on the email when one was checked: valid / risky / invalid / unknown.
+    email_status: Literal["valid", "risky", "invalid", "unknown"] | None = None
+    email_checks: list[str] = Field(default_factory=list)  # e.g. ["fullenrich:CATCH_ALL", "zerobounce:valid"]
     source: SourceAttribution
 
 

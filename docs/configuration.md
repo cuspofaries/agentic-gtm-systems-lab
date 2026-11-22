@@ -84,6 +84,14 @@ Only used with `--discovery pdl`. See [`docs/pdl.md`](pdl.md).
 | `pdl_industries` | list of strings | not set | PDL `industry` values to keep, e.g. `computer software`. Empty = no industry filter. |
 | `pdl_tags` | list of strings | not set | PDL company `tags` to keep, e.g. `software as a service`. Empty = no tag filter. |
 
+### `contacts`
+
+Only used with `--email-finder` or `--email-verifier`. See [`docs/email.md`](email.md).
+
+| Key | Type | Demo value | Effect |
+|---|---|---|---|
+| `on_unverified_email` | `keep` or `drop_email` | not set (`keep`) | What to do with emails judged `risky` or `unknown`. `keep` writes them with their verdict shown in the review; `drop_email` removes them. An `invalid` email is always removed. |
+
 ### `crm`
 
 Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
@@ -107,6 +115,9 @@ Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
 | `demo` | `--enrichment` | `fixture` | Contact source: `fixture` or `pdl` (needs `PDL_API_KEY`). |
 | `demo` | `--profiles-per-account` | `2` | `pdl` only: maximum contacts fetched per account. Also sets the maximum cost of one call. |
 | `demo` | `--title-levels` | empty | `pdl` only: comma-separated `job_title_levels` to keep, e.g. `cxo,vp,director`. |
+| `demo` | `--email-finder` | `none` | `fullenrich` finds the work email of contacts that have none. See `docs/email.md`. |
+| `demo` | `--email-verifier` | `none` | `zerobounce` checks every email before the plan. |
+| `demo` | `--email-finder-cents`, `--email-verifier-cents` | `10`, `2` | Budget value of one credit, in cents. Not published prices: set them to your plan's. |
 | `demo`, `runs`, `eval`, `sync` | `--json` | off | Structured output instead of tables. |
 | `demo` | `--max-llm-calls` | `5` | Agentic mode only. Hard cap on LLM calls per run. Past the cap, accounts stay `insufficient_evidence`. |
 | `demo` | `--max-llm-cents` | `50` | Agentic mode only. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |
@@ -128,6 +139,8 @@ The CLI does **not** read a `.env` file. Export these in your shell, or use your
 | `ANTHROPIC_API_KEY` | unset | Credential for agentic mode. |
 | `ANTHROPIC_AUTH_TOKEN` | unset | Alternative credential for agentic mode. |
 | `PDL_API_KEY` | unset | People Data Labs key for `--discovery pdl` / `--enrichment pdl`. |
+| `FULLENRICH_API_KEY` | unset | FullEnrich key for `--email-finder fullenrich`. |
+| `ZEROBOUNCE_API_KEY` | unset | ZeroBounce key for `--email-verifier zerobounce`. |
 | `HUBSPOT_SERVICE_KEY` | unset | HubSpot Service Key for `--crm hubspot`. `HUBSPOT_ACCESS_TOKEN` is accepted too. |
 | `GTM_LAB_LIVE_HUBSPOT` | unset | Set to `1` to run the live HubSpot test (`pytest -m live_hubspot`). |
 
@@ -144,6 +157,8 @@ These are not exposed as config yet. Changing them means editing the code.
 | Enrichment cost per call | `providers/fixture_enrichment.py`, `cost_cents_per_call` | `10` cents | Synthetic price of the fixture provider. A real provider adapter sets its own. |
 | PDL price per profile | `providers/pdl.py`, `DEFAULT_PRICE_CENTS_PER_PROFILE` | `28` cents | PDL's published first paid tier; values free credits too, so the budget still stops calls. |
 | PDL call spacing / 429 retry | `providers/pdl.py` | `6` s / `61` s | Free plan allows 10 requests per minute. |
+| FullEnrich polling | `providers/email.py`, `FullEnrichFinder` | first after `10` s, then every `15` s, give up after `300` s | Enrichment is asynchronous. |
+| ZeroBounce timeout | `providers/email.py`, `ZeroBounceVerifier` | `30` s | Sent as `timeout`; past it ZeroBounce answers `unknown`. |
 | HubSpot API version | `crm/hubspot.py`, `API_VERSION` | `2026-09` | Dated HubSpot API version used for every call. |
 | HubSpot idempotency property | `crm/hubspot.py`, `REF_PROPERTY` | `gtm_lab_external_ref` | Unique custom property created on companies and contacts. |
 | Sync retries | `workflows/account_discovery.py`, `sync(max_retries=2)` | `2` | Retries per CRM write on a retriable error, so 3 attempts in total. Immediate, no backoff. |

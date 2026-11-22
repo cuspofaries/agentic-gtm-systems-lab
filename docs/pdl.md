@@ -37,7 +37,7 @@ Person Search uses each persona's `titles_any_of`. A phrase matches when its wor
 
 ## Behavior measured on a free-plan key
 
-- **Contact details are not included on the free plan.** `work_email`, `emails` and `mobile_phone` come back as `true`/`false` ("exists"), not as values. Names, job titles, levels, LinkedIn URLs and job-change dates are returned. Contacts are therefore written to the CRM without email; the provider only keeps an email when PDL returns an actual address.
+- **Contact details are not included on the free plan.** `work_email`, `emails` and `mobile_phone` come back as `true`/`false` ("exists"), not as values. Names, job titles, levels, LinkedIn URLs and job-change dates are returned. Contacts are therefore written to the CRM without email; the provider only keeps an email when PDL returns an actual address. Add `--email-finder fullenrich` to find them (see [`email.md`](email.md)).
 - **`job_title` is an exact field.** `match_phrase` "sales operations" only finds people titled exactly that (in a test, 0 people at a company with 653 people in sales). The provider uses wildcards (`*sales*operations*`); titles are stored lowercase.
 - **Rate limit: 10 requests per minute.** Above that PDL answers 429 and spends nothing. The provider spaces calls by 6 seconds and retries a 429 once after the window, so a 25-account plan takes about 2.5 minutes.
 - **The "remaining credits" header lags.** Per-call `x-call-credits-spent` was consistent; `x-totallimit-remaining` was sometimes off by a few credits between calls. Check the PDL dashboard for the authoritative balance.

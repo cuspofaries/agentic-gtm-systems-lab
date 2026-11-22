@@ -92,6 +92,16 @@ class DiscoverySettings(BaseModel):
     pdl_tags: list[str] = Field(default_factory=list)  # e.g. ["software as a service"]
 
 
+class ContactSettings(BaseModel):
+    """What to do with contact emails that a finder or verifier could not confirm."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # An email judged invalid is always removed. `risky` (catch-all, high probability) and
+    # `unknown` emails are kept with their status by default, or removed with drop_email.
+    on_unverified_email: Literal["keep", "drop_email"] = "keep"
+
+
 class GTMContext(BaseModel):
     """The full GTM context, versioned and loadable in one call."""
 
@@ -106,3 +116,4 @@ class GTMContext(BaseModel):
     policy: Policy
     crm: CRMSettings = Field(default_factory=CRMSettings)
     discovery: DiscoverySettings = Field(default_factory=DiscoverySettings)
+    contacts: ContactSettings = Field(default_factory=ContactSettings)

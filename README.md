@@ -195,7 +195,7 @@ A HubSpot adapter ships: `gtm-lab demo --crm hubspot`, then approve and sync as 
 
 - **Offline by default.** The demo uses fixtures and a mock CRM; real providers (HubSpot, People Data Labs) are opt-in flags.
 - **The agentic path has not been run against the live API in CI.** It is unit-tested with a fake client. There is no labeled benchmark yet, so the LLM-vs-baseline comparison shows agreement, not accuracy.
-- **Real providers: HubSpot (CRM) and People Data Labs (companies, contacts).** Salesforce is not implemented. On PDL's free plan, contacts come without emails.
+- **Real providers: HubSpot (CRM), People Data Labs (companies, contacts), FullEnrich (emails), ZeroBounce (email checks).** Salesforce is not implemented. On PDL's free plan contacts come without emails; FullEnrich can fill them (see `docs/email.md`).
 - **Idempotency is per run, not universal.** Retrying or re-syncing a run never duplicates. Two different runs (or another tool) writing the same new company are separated only by a domain search, and HubSpot's search lags writes by a few seconds: run one sync at a time per portal (see `docs/hubspot.md`).
 - **No multi-tenant state.** One SQLite file per workflow run.
 - **No scheduler / queue.** `gtm-lab` is CLI-driven; you orchestrate when it runs.
@@ -238,6 +238,7 @@ agentic-gtm-systems-lab/
 │   ├── claude-code.md            the /gtm-lab skill: commands, safety, real transcripts
 │   ├── hubspot.md                HubSpot connector: setup, behavior, limits
 │   ├── pdl.md                    People Data Labs discovery and contacts
+│   ├── email.md                  FullEnrich email finding, ZeroBounce verification
 │   ├── failure-scenarios.md
 │   ├── integration-guide.md
 │   └── adr/                      architectural decision records
