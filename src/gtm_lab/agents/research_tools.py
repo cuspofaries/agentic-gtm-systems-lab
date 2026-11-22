@@ -122,6 +122,7 @@ class Page:
     title: str
     text: str
     published_at: datetime | None
+    truncated: bool = False  # the page was longer than what was read
 
 
 class ResearchSession:
@@ -204,7 +205,8 @@ class ResearchSession:
             return "Only URLs returned by a search in this research can be read."
         if url in self.pages:
             p = self.pages[url]
-            return f"<page id={json.dumps(p.ref)} url={json.dumps(url)}>{p.text}</page>"
+            note = "\n[Truncated: the rest of the page was not seen.]" if p.truncated else ""
+            return f"<page id={json.dumps(p.ref)} url={json.dumps(url)}>{p.text}{note}</page>"
         body = {"urls": [url], "text": {"maxCharacters": PAGE_CHARS}}
         got, err = self._exa(EXA_CONTENTS_URL, body, EXA_CONTENTS_MILLIDOLLARS, "read", url)
         if err:
@@ -216,10 +218,14 @@ class ResearchSession:
             return "The page has no readable text."
         r = self.found[url]
         ref = f"page-{len(self.pages) + 1}"
-        self.pages[url] = Page(ref, url, r.get("title") or "", text[:PAGE_CHARS], exa._parse_date(r.get("publishedDate")))
-        self.trace.append({"tool": "read", "input": url, "page": ref,
+        truncated = len(text) >= PAGE_CHARS
+        self.pages[url] = Page(ref, url, r.get("title") or "", text[:PAGE_CHARS],
+                               exa._parse_date(r.get("publishedDate")), truncated)
+        self.trace.append({"tool": "read", "input": url, "page": ref, "truncated": truncated,
                            "outcome": f"{len(self.pages[url].text)} chars", "cost_millidollars": spent})
-        return f"<page id={json.dumps(ref)} url={json.dumps(url)}>{self.pages[url].text}</page>"
+        note = (f"\n[Truncated: only the first {PAGE_CHARS} characters were read; the rest of the page was "
+                "not seen.]" if truncated else "")
+        return f"<page id={json.dumps(ref)} url={json.dumps(url)}>{self.pages[url].text}{note}</page>"
 
     # --- checks -----------------------------------------------------------------------
 

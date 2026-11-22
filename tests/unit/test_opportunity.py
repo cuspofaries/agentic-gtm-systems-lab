@@ -151,7 +151,7 @@ def test_verifier_failure_fails_closed(context):
 
 @pytest.mark.unit
 def test_quote_from_an_unread_page_is_dropped(context):
-    agent, _, _ = _agent([SEARCH_EVENTS, _submit(1, SUPPORT)])
+    agent, _, _ = _agent([SEARCH_EVENTS, _submit(1, SUPPORT)], max_steps=2)  # no room to send back
     a = agent.assess(_account(), _decision(), context)
     assert a.observed_events[0].check == "page_not_read" and a.unsupported_claims == 1
     assert a.semantic_matches[0].validation == "ungrounded" and a.assessment_status != "evidence_backed"
@@ -201,6 +201,54 @@ def test_rereading_the_support_page_does_not_examine_other_results(context):
     a = agent.assess(_account(), _decision(), context)
     c = a.disconfirmation_checks[0]
     assert c.pages_read == [JOB] and not c.credited and "may contradict" in c.reason
+
+
+@pytest.mark.unit
+def test_unread_disconfirmation_results_are_sent_back_by_url(context):
+    other = "https://news.example/acme-update"
+    web = FakeWeb({JOB: ("SDR - Acme Analytics", "2026-11-17T00:00:00.000Z", JOB_TEXT),
+                   other: ("Acme Analytics update", "2026-11-20T00:00:00.000Z", "Acme Analytics hosted a meetup.")})
+    turns = [READ_JOB, SEARCH_EVENTS, _submit(3, SUPPORT), _resp(_use("read", 4, url=other)),
+             _submit(5, SUPPORT), _verdict()]
+    agent, client, _ = _agent(turns, web)
+    a = agent.assess(_account(), _decision(), context)
+    sent = client.requests[3]["messages"][-1]["content"][0]
+    assert sent["is_error"] and other in sent["content"]
+    assert a.disconfirmation_checks[0].credited and a.assessment_status == "evidence_backed"
+
+
+@pytest.mark.unit
+def test_a_truncated_page_cannot_rule_the_problem_out(context):
+    long_text = "Acme Analytics benefits: health, dental, 401k. " * 200 + "New reps take too long to ramp."
+    web = FakeWeb({JOB: ("SDR - Acme Analytics", "2026-11-17T00:00:00.000Z", long_text)})
+    turns = [READ_JOB, SEARCH_EVENTS,
+             _submit(3, _obs("Acme Analytics benefits: health, dental, 401k.", stance="irrelevant"), checks=[])]
+    agent, client, _ = _agent(turns, web)
+    a = agent.assess(_account(), _decision(), context)
+    page_result = client.requests[1]["messages"][-1]["content"][0]["content"]
+    assert "[Truncated" in page_result
+    assert a.assessment_status == "insufficient_evidence" and a.coverage == "incomplete"
+    assert a.recommended_next_action == "research_more"
+
+
+@pytest.mark.unit
+def test_cassette_keys_change_with_the_prompt(tmp_path):
+    from types import SimpleNamespace
+
+    from gtm_lab.evaluations.opportunity_eval import LLMCassette
+
+    class One:
+        messages = SimpleNamespace(create=lambda **kw: _verdict())
+
+    rec = LLMCassette(tmp_path / "c.json", "record", One())
+    rec.for_case("x").messages.create(model="m", system="prompt A", tools=[], messages=[{"role": "user", "content": "q"}])
+    rec.save("m")
+    rep = LLMCassette(tmp_path / "c.json", "replay")
+    rep.for_case("x").messages.create(model="m", system="prompt A", tools=[], messages=[{"role": "user", "content": "q"}])
+    rep2 = LLMCassette(tmp_path / "c.json", "replay")
+    with pytest.raises(LookupError):
+        rep2.for_case("x").messages.create(model="m", system="prompt B", tools=[],
+                                           messages=[{"role": "user", "content": "q"}])
 
 
 @pytest.mark.unit

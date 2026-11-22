@@ -65,9 +65,12 @@ Then call `submit` once:
   the quote itself states it, its stance toward one pain (supports, contradicts,
   irrelevant, unresolved) and a one-sentence rationale.
 - disconfirmation_checks: for each pain you support, the competing explanation you
-  tested, the exact query of the recent_events search you ran for it, and what it found
-  (found_contradiction with the observation ids, no_contradiction_found, unresolved).
-  Read the relevant results before claiming no contradiction.
+  tested, the exact query of the recent_events search you ran for it (the query must
+  name the company), and what it found (found_contradiction with the observation ids,
+  no_contradiction_found, unresolved). no_contradiction_found counts only if you opened
+  every result that search returned with `read`, including ones that look unrelated.
+- If a page is marked truncated, the part you did not see may change the answer: do not
+  conclude from what is missing.
 - alternative explanations and unknowns. Abstaining is a valid answer.
 
 The system checks every quote, has each supporting quote checked independently against
@@ -278,14 +281,23 @@ class OpportunityInvestigator:
                 + "\n\nSignals already found this run (pages you may read without searching):\n"
                 + "<result>" + json.dumps(signals, default=str) + "</result>"
                 + f"\n\nYou have {self.max_steps} tool calls in total, including `submit`.")
-        sent_back = False
+        sent_back = sent_back_unread = False
 
         def on_submit(args: dict, steps: int) -> str | None:
             # Code-enforced disconfirmation: before supporting evidence can stand, at least
             # one search for recent events must have run (a freeze, layoffs, an incumbent
             # tool are often on another page). Sent back once, while two calls remain.
-            nonlocal sent_back
+            nonlocal sent_back, sent_back_unread
             supports = any(o.get("stance") == "supports" for o in args.get("observations") or [])
+            if supports and not sent_back_unread and steps + 2 <= self.max_steps:
+                searches = {str(t.get("input", "")): t for t in _company_event_searches(session, account)}
+                unread = sorted({u for c in args.get("disconfirmation_checks") or []
+                                 if c.get("outcome") == "no_contradiction_found" and str(c.get("query")) in searches
+                                 for u in searches[str(c.get("query"))].get("results") or [] if u not in session.pages})
+                if unread:
+                    sent_back_unread = True
+                    return ("A no_contradiction_found check counts only if every result of its search was read. "
+                            "Not yet read: " + ", ".join(unread[:5]) + ". Read them, then submit again.")
             if (supports and not _company_event_searches(session, account) and not sent_back
                     and steps + 2 <= self.max_steps):
                 sent_back = True
@@ -438,7 +450,14 @@ class OpportunityInvestigator:
         elif "supported" in by or "mixed" in by:
             status = "needs_research"  # support without a credited disconfirmation, or support plus contradiction
         elif valid and ("contradicted" in by or all(o.stance == "irrelevant" for o in valid)):
-            status = "not_relevant"
+            # Only contradicted or untested pains, or only irrelevant events. If everything
+            # seen comes from truncated pages and nothing contradicts outright, the unseen
+            # part may hold the answer: conclude nothing.
+            truncated = [o for o in valid if session.pages.get(o.url) and session.pages[o.url].truncated]
+            if len(truncated) == len(valid) and not any(m.validation == "grounded_contradiction" for m in matches):
+                status, coverage = "insufficient_evidence", "incomplete"
+            else:
+                status = "not_relevant"
         else:
             status = "hypothesis_only" if suggested else "insufficient_evidence"
         disconfirmed = not unchecked

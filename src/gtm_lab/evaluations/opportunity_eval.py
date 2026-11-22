@@ -155,7 +155,12 @@ class LLMCassette:
     def _create(self, **kw):
         self.turn += 1
         last = json.dumps(kw["messages"][-1]["content"], sort_keys=True, default=str)
-        key = f"{self.case_id}#{self.turn}#{hashlib.sha256(last.encode()).hexdigest()[:16]}"
+        # The prompt and tool schemas are part of the key: after a prompt change, an old
+        # recording must miss, not replay answers given to a different prompt.
+        agent = json.dumps({"model": kw.get("model"), "system": kw.get("system"), "tools": kw.get("tools")},
+                           sort_keys=True, default=str)
+        fp = hashlib.sha256(agent.encode()).hexdigest()[:12]
+        key = f"{self.case_id}#{self.turn}#{fp}#{hashlib.sha256(last.encode()).hexdigest()[:16]}"
         if self.mode == "replay" or (self.mode == "extend" and key in self.data["turns"]):
             if key not in self.data["turns"]:
                 self.misses.append(key)

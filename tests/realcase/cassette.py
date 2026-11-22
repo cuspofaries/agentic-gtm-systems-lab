@@ -13,6 +13,7 @@ so a cassette belongs in a private directory, never in the repository.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import urllib.parse
 from collections import defaultdict
@@ -139,7 +140,8 @@ class Cassette:
         """
         def create(**kw):
             last = kw["messages"][-1]["content"]
-            body = json.dumps({"model": kw.get("model"), "tools": [t["name"] for t in kw.get("tools", [])],
+            body = json.dumps({"model": kw.get("model"), "tools": kw.get("tools", []),
+                               "system": hashlib.sha256(str(kw.get("system", "")).encode()).hexdigest()[:16],
                                "last": last}, sort_keys=True, default=_plain).encode()
 
             def real():
