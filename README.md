@@ -214,12 +214,25 @@ To add another vendor, implement the interface it belongs to (`DiscoveryProvider
 
 ## How agentic is it?
 
-The pipeline is orchestrated by code: discovery, signal search, contact search, email steps, reconciliation, policies and sync run in a fixed order with fixed rules. Claude acts in two places, both optional and both capped:
+The pipeline is orchestrated by code: discovery, signal search, contact search, email steps, reconciliation, policies and sync run in a fixed order with fixed rules. Claude acts in three places, all optional and capped:
 
-- **Undecided accounts.** With `--research exa`, Claude researches each account the rules return as `insufficient_evidence`: it chooses its searches, reads pages, decides when it has enough, and submits a decision with quotes. The code bounds the loop (steps, LLM spend, search spend) and keeps a piece of evidence only if its quote is found in a page Claude actually read. With `--agentic`, Claude decides from the account data alone, without researching. See [`docs/research.md`](docs/research.md).
+- **Is there evidence of the problem we solve?** With `--opportunity exa`, before any contact enrichment, Claude investigates new ICP-qualified accounts: it reads the pages behind a hiring or funding signal, searches, tests misleading explanations (evergreen posting, wrong team, namesake, old event, incumbent tool) and may abstain. The code checks every observation it reports and computes the status, the next action and the hypothetical buying roles. See [`docs/opportunity-intelligence.md`](docs/opportunity-intelligence.md).
+- **Missing company facts.** With `--research exa`, Claude searches and quotes facts the rules need (headcount, location); the code checks and reconciles the claims and the rules decide. With `--agentic`, Claude decides undecided accounts from the account data alone. See [`docs/research.md`](docs/research.md).
 - **Conversation.** The `/gtm-lab` skill in Claude Code runs, inspects and explains runs.
 
-Everything else is code. Claude never writes to the CRM: its decisions go into a plan that a person approves, and sync is a separate step.
+Claude never decides the ICP and never writes to the CRM: its output goes into a plan and a brief that a person reviews; approval and sync are separate steps.
+
+### What does the agent decide that fixed rules cannot decide as well, and what shows it?
+
+Whether a company event is evidence of the specific problem the product solves. On 24 hand-labeled fictional cases (`gtm-lab opportunity-eval`, free and offline from a recorded cassette), with the same inputs:
+
+| | Signal-kind baseline (no AI) | Agent |
+|---|---|---|
+| Relevant (8), called relevant | 6 | 8 |
+| Not relevant (9), called relevant | 8 | 0 |
+| Should abstain (7), called relevant | 6 | 1 |
+
+The labels are one person's, the pages are fictional, and two code checks were fixed after seeing the first recording on the same cases. It shows behavior on known failure modes, not business impact. Details, a checks-only control and the limits: [`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md).
 
 ## What are the limitations?
 
@@ -232,6 +245,7 @@ Everything else is code. Claude never writes to the CRM: its decisions go into a
 
 ## What should I explore next?
 
+- Run the opportunity comparison on real accounts labeled by someone who did not write the cases, and require a disconfirming search before `evidence_backed` (the agent's one wrong call in the evaluation).
 - Turn on `require_signal_for_qualification` with `--signals exa` and compare the qualified set with and without it (see [`docs/signals.md`](docs/signals.md)).
 - Implement a Salesforce `CRMAdapter` on the same pattern as `crm/hubspot.py` (unique external ref, revalidation before each write).
 - Extend `evaluate_entry` with your organization's own hard policies.
@@ -252,10 +266,11 @@ agentic-gtm-systems-lab/
 │   ├── observability/            ← JSONL event recorder
 │   ├── evaluations/              ← Post-run integrity checks
 │   ├── review.py                 ← Markdown review artifact renderer
-│   └── cli.py                    ← Typer CLI (demo, runs, inspect, eval, approve, reject, crm-setup, sync)
+│   └── cli.py                    ← Typer CLI (demo, runs, inspect, eval, opportunity, opportunity-eval, approve, reject, crm-setup, sync)
 ├── examples/account-discovery-to-crm/
 │   ├── config/gtm-context.yaml
 │   └── fixtures/{discovery,enrichment,crm-seed}.yaml
+├── evals/opportunity/            ← 24 labeled cases, recorded Claude answers, generated REPORT.md
 ├── tests/
 │   ├── unit/                     ← components, and every real provider against a fake transport
 │   ├── integration/              ← end-to-end, no-network, CLI and Claude Code skill checks
@@ -271,6 +286,8 @@ agentic-gtm-systems-lab/
 │   ├── email.md                  FullEnrich email finding, ZeroBounce verification
 │   ├── signals.md                Exa buying signals: checks, kinds, budget
 │   ├── research.md               bounded research loop: tools, caps, evidence checks
+│   ├── opportunity-intelligence.md  product-specific opportunity assessment, brief, GTM Brain
+│   ├── agentic-vs-deterministic.md  responsibility split, baseline vs agent evaluation
 │   ├── real-case-test.md         end-to-end test on private real data (record once, replay free)
 │   ├── failure-scenarios.md
 │   ├── integration-guide.md
@@ -306,7 +323,8 @@ agentic-gtm-systems-lab/
 | Salesforce adapter | Planned - not implemented |
 | Labeled benchmark for the LLM step | Planned - not implemented |
 | Dated buying signals (Exa) | Implemented; unit-tested against a fake in CI; run on two real companies |
-| Agent choosing its own research steps in a bounded loop (`--research exa`) | Implemented; tested with a scripted Claude client and a fake Exa in CI; run against the real API on two real companies |
+| Agent choosing its own research steps in a bounded loop (`--research exa`) | Implemented; claims checked and reconciled by code, rules decide; tested with a scripted Claude client and a fake Exa in CI; an earlier version run against the real API on two real companies |
+| Opportunity assessment and brief (`--opportunity exa`, `gtm-lab opportunity`) | Implemented; evaluated against a no-AI baseline on 24 labeled fictional cases with recorded Claude answers (replayed in CI); not yet run on real accounts |
 
 ## Contributing
 

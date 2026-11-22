@@ -101,6 +101,29 @@ Only used with `--signals exa`. See [`docs/signals.md`](signals.md).
 | `budget_millidollars` | int | not set (`100`) | Spend cap on signal searches per run, in thousandths of a dollar (`100` = $0.10, 25 Exa `lite` searches). Checked before each search against its maximum cost; accounts past the cap are searched no further. Separate from `policy.enrichment_budget_cents`. |
 | `max_results_per_account` | int, 1 to 10 | not set (`5`) | Results asked per account. Exa bills each result above 10, so 10 is the ceiling. |
 
+### `research_policy`
+
+Used by `--research` and `--opportunity`.
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `company_facts_max_age_days` | int | `730` | How far back a `company_facts` search goes (headcount, location, industry). Events use `signal_policy.max_signal_age_days`. |
+| `opportunity_max_accounts` | int | `3` | Accounts the opportunity investigator assesses per run (the baseline assesses every eligible one). |
+| `opportunity_max_steps` | int, 2 or more | `8` | Tool calls per assessed account, `submit` included. |
+
+### GTM Brain: `offers`, `pain_points`, `buying_roles`, `signal_interpretation`
+
+Optional; required by `--opportunity`. The example config has a complete set. See [`docs/opportunity-intelligence.md`](opportunity-intelligence.md).
+
+| Key | Fields | Effect |
+|---|---|---|
+| `offers` | `id`, `name`, `target_problem`, `value_proposition`, `pains` (pain ids), `exclusions`, `evidence_expectations` | The first offer is the one assessed. Its text is given to the investigator. |
+| `pain_points` | `id`, `description`, `evidence_terms`, `supporting_events`, `weakening_events` | A supporting quote must contain one of `evidence_terms`, or its stance becomes `unresolved`. |
+| `buying_roles` | `id`, `role` (`problem_owner`, `sponsor`, `stakeholder`, `user`), `title_hints`, `why`, `pains` | Roles listed for supported pains. Hypotheses, never people. |
+| `signal_interpretation` | `signal_kind`, `may_suggest` (pain ids), `misleading_alternatives` | What the baseline maps a signal to, and what the investigator is asked to rule out. |
+
+Pain ids that do not exist are rejected when the context loads.
+
 ### `crm`
 
 Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
@@ -131,9 +154,14 @@ Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
 | `demo` | `--research` | `none` | `exa` researches the accounts the rules return as `insufficient_evidence` in a bounded tool loop (Claude plus Exa; needs `ANTHROPIC_API_KEY` and `EXA_API_KEY`). Cannot be combined with `--agentic`. See `docs/research.md`. |
 | `demo` | `--research-steps` | `6` | Research only: maximum tool calls per account, `submit` included. |
 | `demo` | `--research-exa-millidollars` | `50` | Research only: Exa spend cap per run, in thousandths of a dollar. The LLM cap is `--max-llm-cents`. |
+| `demo` | `--opportunity` | `none` | `exa` assesses new, ICP-qualified accounts for the offer's problem before enrichment (Claude plus Exa; needs `ANTHROPIC_API_KEY`, `EXA_API_KEY` and `offers` in the context). Writes `opportunity_<run-id>.md`. |
+| `demo` | `--opportunity-include-undecided` | off | Also assess accounts the ICP left `insufficient_evidence`. Never promotes them. |
+| `demo` | `--opportunity-exa-millidollars` | `50` | Opportunity only: Exa spend cap per run. The LLM cap is `--max-llm-cents`. |
+| `opportunity` | `RUN_ID`, `--json` | | The run's Account Opportunity Brief, from persisted state. |
+| `opportunity-eval` | `--record`, `--report FILE`, `--json`, `--cases`, `--cassette` | replay | Baseline vs checks-only vs agent on the labeled cases. Replays the cassette by default (free); `--record` calls the API (paid). Exit 1 if a replay misses a recorded request. |
 | `demo`, `runs`, `eval`, `sync` | `--json` | off | Structured output instead of tables. |
 | `demo` | `--max-llm-calls` | `5` | Agentic mode only. Hard cap on LLM calls per run. Past the cap, accounts stay `insufficient_evidence`. |
-| `demo` | `--max-llm-cents` | `50` | Agentic and research modes. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |
+| `demo` | `--max-llm-cents` | `50` | Agentic, research and opportunity modes. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |
 | `demo`, `approve`, `reject`, `sync` | `--example-dir` | bundled example | Directory containing `config/gtm-context.yaml` and `fixtures/`. Point it at your own copy to use your own context and fixtures. |
 | `crm-setup` | `--crm`, `--yes` | `hubspot`, off | Prepares a real CRM for writes (creates the idempotency property). Asks for confirmation unless `--yes`. |
 | all commands | `--state-dir` | `./.gtm-lab-state` | Where run state, the mock CRM, the event log and review artifacts are written. |

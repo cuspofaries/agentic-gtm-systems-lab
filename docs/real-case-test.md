@@ -72,7 +72,7 @@ It fails when a result differs from `expect:`, and it prints each difference. It
 | `contacts_proposed`, `emails_found` | Contacts in the plan, and how many have an email. |
 | `emails_by_status` | Emails by verdict: `valid`, `risky`, `invalid`, `unknown`. |
 | `signals_by_kind`, `signals_spent_millidollars` | With `run.signals: exa`: signals kept per kind, and what the signal budget was charged. `credits` then also has `exa_millidollars`, read from Exa's answers. |
-| `research_decisions`, `research_evidence_kept`, `research_missing`, `research_errors` | With `run.research: exa`: the decision per researched domain, how many quotes were verified, why a decision stayed open, and any API error. |
+| `research_decisions`, `research_claims_checked`, `research_resolutions`, `research_missing`, `research_errors` | With `run.research: exa`: the decision per researched domain, how many claims passed their checks, what each missing field became (`filled`, `contradicted`, `unresolved`), why a decision stayed open, and any API error. |
 | `research_llm_calls`, `research_llm_cents`, `research_exa_millidollars` | What the loop spent. `credits` then also has `anthropic_input_tokens` and `anthropic_output_tokens`, read from the API's answers. |
 | `crm_writes_during_plan` | Must be empty. The test fails on any CRM call that changes data. |
 
