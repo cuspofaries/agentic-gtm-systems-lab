@@ -267,10 +267,12 @@ class OpportunityInvestigator:
                                        contradicting=con))
         by = {h.status for h in hyps}
         exhausted = any(t.get("outcome") == "exa_budget_exceeded" for t in session.trace)
-        searched = any(t.get("tool") in ("search", "read") and t.get("cost_millidollars") is not None
-                       for t in session.trace)
+        calls = [t for t in session.trace if t.get("tool") in ("search", "read")]
+        succeeded = any(t.get("cost_millidollars") is not None for t in calls)
+        failed = any(str(t.get("outcome", "")).startswith(("HTTP", "error")) for t in calls)
         coverage = ("found" if valid else "incomplete" if exhausted else
-                    "checked_no_result" if searched else "not_attempted")
+                    "failed" if failed and not succeeded else
+                    "checked_no_result" if succeeded else "not_attempted")
         suggested = _suggested_pains(ctx, offer, _fresh_kinds(account, ctx, self.now()))
         if "supported" in by:
             status = "evidence_backed"
@@ -291,6 +293,8 @@ class OpportunityInvestigator:
             action, reason = "defer", "Checked sources point away from the offer's pains for now."
         elif coverage == "incomplete":
             action, reason = "research_more", "The research budget ran out before the question was settled."
+        elif coverage == "failed":
+            action, reason = "research_more", "The sources could not be read; nothing is concluded."
         elif coverage == "checked_no_result":
             action, reason = "no_relevant_evidence", ("Searched; no checked source ties an event to the offer's "
                                                       "pains. This is not evidence that the account is out of market.")

@@ -482,6 +482,49 @@ def opportunity(
         print(render_brief(run_id, store))
 
 
+@app.command("opportunity-eval")
+def opportunity_eval(
+    cases: Path = typer.Option(Path("evals/opportunity/cases.yaml"), "--cases"),
+    cassette: Path = typer.Option(Path("evals/opportunity/cassette.json"), "--cassette"),
+    example_dir: Path = typer.Option(DEFAULT_EXAMPLE, "--example-dir"),
+    record: bool = typer.Option(False, "--record", help="Call the Anthropic API and write the cassette. Spends money."),
+    report: Path | None = typer.Option(None, "--report", help="Also write the Markdown report to this file."),
+    as_json: bool = typer.Option(False, "--json"),
+):
+    """Compare the no-AI baseline with the agent on labeled cases. Replays by default (free, offline)."""
+    from .evaluations.opportunity_eval import LLMCassette, metrics, report_markdown, run_eval
+
+    ctx = load_context(example_dir / "config" / "gtm-context.yaml")
+    if record:
+        if not _anthropic_credentials_available():
+            _fail("--record needs Anthropic credentials.")
+        import anthropic
+
+        tape = LLMCassette(cassette, "record", anthropic.Anthropic())
+    else:
+        if not cassette.exists():
+            _fail(f"No cassette at {cassette}.", "Record one with --record (spends money).")
+        tape = LLMCassette(cassette, "replay")
+    run = run_eval(cases, ctx, tape)
+    if record:
+        from .agents.anthropic_provider import DEFAULT_MODEL
+
+        tape.save(model=DEFAULT_MODEL)
+    md = report_markdown(run)
+    if report:
+        report.write_text(md + "\n")
+    if as_json:
+        _emit_json({"metrics": metrics(run), "misses": run.misses,
+                    "cases": [{"id": r.case["id"], "label": r.case["label"],
+                               "baseline": r.baseline.assessment_status, "agent": r.agent.assessment_status,
+                               "agent_next_action": r.agent.recommended_next_action, "coverage": r.agent.coverage}
+                              for r in run.results]})
+    else:
+        print(md)
+    if run.misses:
+        raise typer.Exit(1)
+
+
 @app.command()
 def approve(
     run_id: str = typer.Argument(...),
