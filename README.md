@@ -245,16 +245,16 @@ Whether a company event is evidence of the specific problem the product solves. 
 | Held out (10): false positives | 3 of 3 | 0 of 3 |
 | Held out (10): relevant found | 2 of 3 | 2 of 3 |
 
-And on the decision it drives, which accounts get paid contact enrichment (16 new cases, agent v2, `gtm-lab decision-eval`, contacts simulated at 80¢):
+And on the decision it drives, which accounts get paid contact enrichment (`gtm-lab decision-eval`, contacts simulated at 80¢, LLM and search observed):
 
 | | Enrich every qualified account (default) | `--enrichment-strategy opportunity_gated` |
 |---|---|---|
-| Enriched / relevant among them | 15 / 4 | 2 / 2 |
-| Wasted enrichments | 11 | 0 |
-| Relevant accounts missed | 0 of 4 | 2 of 4 |
-| Total cost (contacts + LLM + search) | 1200¢ | 274¢ |
+| 12 fresh cases (v2.1): enriched / relevant among them | 12 / 4 | 4 / 4 |
+| 12 fresh cases: wasted enrichments, relevant missed | 8, 0 | 0, 0 |
+| 12 fresh cases: total cost | 960¢ | 414¢ |
+| 16 earlier cases (v2, before a prompt fix): enriched, wasted, missed | 15, 11, 0 | 2, 0, 2 of 4 |
 
-The labels are one person's, the pages are fictional, and code checks were changed after seeing results on the first 24 cases; the 10 held-out and 16 decision cases were labeled before any model run and not used for tuning. It shows behavior on known failure modes, not business impact. Details, a checks-only control and the limits: [`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md).
+The labels are one person's, the pages are fictional, and code checks were changed after seeing results on the first 24 cases; the 10 held-out, 16 decision and 12 fresh cases were each labeled before the model run that measured them. It shows behavior on known failure modes, not business impact. Details, a checks-only control and the limits: [`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md).
 
 ## What are the limitations?
 
@@ -293,7 +293,7 @@ agentic-gtm-systems-lab/
 │   ├── config/gtm-context.yaml
 │   └── fixtures/{discovery,enrichment,crm-seed}.yaml
 ├── evals/opportunity/            ← labeled cases (24 + 10 held out); v1/ frozen agent v1 recordings and reports
-├── evals/decisions/             ← 16 decision cases, agent v2 recording, REPORT.md
+├── evals/decisions/             ← decision cases (16 + 12 fresh), v2.1 recordings and reports; v2/ frozen
 ├── tests/
 │   ├── unit/                     ← components, and every real provider against a fake transport
 │   ├── integration/              ← end-to-end, no-network, CLI and Claude Code skill checks

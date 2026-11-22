@@ -101,10 +101,23 @@ Opportunity labels on the same cases:
 - One abstain miss: a truncated page (the relevant sentence was past what can be read); the agent concluded `not_relevant`.
 - Observations grounded: 22 of 23; disconfirmation checks credited by the code: 6 of 9 claimed.
 
-These are 16 cases with 4 relevant qualified accounts: per-case evidence, not a rate. Full report: `DECISION_AWARE_GTM_EVOLUTION_REPORT.md`.
+These are 16 cases with 4 relevant qualified accounts: per-case evidence, not a rate. That v2 recording is frozen in `evals/decisions/v2/`.
+
+### v2.1 on 12 fresh cases
+
+The prompt now states the code's rule (read every result before claiming no contradiction), truncated pages are marked, and replay keys include the prompt. On 12 new cases labeled before any run (`evals/decisions/fresh.yaml`, `gtm-lab decision-eval --cases evals/decisions/fresh.yaml --cassette evals/decisions/fresh-cassette.json`):
+
+| | Enrich every qualified account | Gate on the signal kind | Gate on the agent's assessment |
+|---|---|---|---|
+| Enriched | 12 | 12 | 4 |
+| Relevant enriched | 4 of 4 | 4 of 4 | 4 of 4 |
+| Wasted enrichments | 8 | 8 | 0 |
+| Total cost | 960¢ | 960¢ | 414¢ |
+
+No miss and no wasted enrichment on these 12; the agent abstained on all 5 abstain cases. The fix that mattered was the prompt sentence: the code's send-back for unread results never had to fire. 12 cases is still small. Full report: `DECISION_AWARE_GTM_EVOLUTION_REPORT.md`.
 
 ## Answer to the two questions
 
 **What does the agent decide that fixed rules cannot decide as well?** Whether a company event is evidence of the specific problem the product solves, and therefore whether an account is worth paid contact enrichment and for which roles: reading the page behind a hiring or funding signal, finding the sentence that ties it to onboarding or ramp time, or the one that rules it out (evergreen, wrong team, namesake, old, incumbent), and abstaining when the pages do not settle it.
 
-**What evidence shows it is better?** On the 24 labeled cases above, against the same inputs: the signal-kind baseline made 8 false positives out of 9 not-relevant cases, the agent none, while finding 8 of 8 relevant cases to the baseline's 6; on 10 held-out cases, 3 of 3 false positives for the baseline and none for the agent, 2 of 3 relevant cases found by each. On 16 new decision cases with agent v2, gating enrichment on its assessment bought 2 enrichments instead of 15, avoided all 11 wasted ones and cost 274¢ instead of 1200¢, but missed 2 of 4 relevant accounts. The evidence is small, fictional and labeled by one person, and one fix was made after seeing the results; it is a reason to run the same comparison on real, independently labeled accounts, not a performance claim.
+**What evidence shows it is better?** On the 24 labeled cases above, against the same inputs: the signal-kind baseline made 8 false positives out of 9 not-relevant cases, the agent none, while finding 8 of 8 relevant cases to the baseline's 6; on 10 held-out cases, 3 of 3 false positives for the baseline and none for the agent, 2 of 3 relevant cases found by each. On 16 new decision cases with agent v2, gating enrichment on its assessment bought 2 enrichments instead of 15, avoided all 11 wasted ones and cost 274¢ instead of 1200¢, but missed 2 of 4 relevant accounts; after aligning the prompt with the code's rule, on 12 fresh cases it bought 4 enrichments instead of 12, all 4 relevant, none wasted, 414¢ instead of 960¢. The evidence is small, fictional and labeled by one person, and one fix was made after seeing the results; it is a reason to run the same comparison on real, independently labeled accounts, not a performance claim.

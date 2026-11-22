@@ -1,6 +1,6 @@
 # Decision-aware GTM: implementation report
 
-Branch `feat/decision-aware`. Not merged.
+Merged in PR #16 (`feat/decision-aware`, agent v2). Follow-up v2.1 in section 8.
 
 ## 1. Audit before changes
 
@@ -88,3 +88,31 @@ The v1 cassettes and reports are frozen in `evals/opportunity/v1/` (cases unchan
 3. Run the comparison on real accounts, labeled independently before any agent run, through the private record/replay harness (needs approval for paid calls).
 4. Ablations (no disconfirmation, no GTM Brain) on a new labeled set.
 5. Contact-gap plans for existing CRM accounts, once a tested read interface for CRM contacts exists.
+
+## 8. Follow-up: agent v2.1, measured on fresh cases
+
+Changes after the v2 results above:
+
+1. **Replay correctness bug.** Cassette keys did not include the system prompt or tool schemas, so after a prompt change an old recording would have replayed answers given to a different prompt without any miss. Keys now include a fingerprint of the model, prompt and tools. The v2 recording is frozen in `evals/decisions/v2/` (replays at `4e00248`).
+2. **Prompt aligned with the code.** The prompt now states that a no-contradiction check counts only if every result of its search was read; an uncredited check is sent back once with the unread URLs.
+3. **Truncated pages.** Pages longer than what is read are marked to the agent, and a `not_relevant` conclusion resting only on truncated pages becomes `insufficient_evidence` with `incomplete` coverage.
+
+12 fresh cases (`evals/decisions/fresh.yaml`), labeled after these changes and before any run (41 turns, 88¢):
+
+| | all_qualified (default) | baseline_gated | opportunity_gated |
+|---|---|---|---|
+| Accounts enriched | 12 | 12 | 4 |
+| Relevant accounts enriched | 4/4 | 4/4 | 4/4 |
+| Enriched although not relevant or abstain expected | 8 | 8 | 0 |
+| Total (contacts simulated at 80¢, LLM and Exa observed) | 960¢ | 960¢ | 414¢ |
+| Persona precision / recall on relevant hits | 14/16, 14/14 | 12/14, 12/14 | 12/12, 12/14 |
+
+Opportunity labels on the fresh cases: relevant 4/4 for the agent (baseline 4/4, keyword control 0/4); not relevant called relevant 0/3 (baseline 3/3, keyword control 1/3); abstentions 5/5 (baseline 0/5, keyword control 5/5). Disconfirmation checks credited: 8 of 8 claimed.
+
+The 16 earlier decision cases, re-recorded with v2.1 (51 turns, 116¢), are **not** an independent measure: their misses motivated the change. On them, v2.1 enriched 4 accounts (4 of 4 relevant, 0 wasted, 444¢ against 1200¢), and the truncated case now ends `insufficient_evidence`.
+
+What actually fixed the two v2 misses: the **prompt rule**. In neither recording did the unread-URL send-back fire; the agent read every result once the prompt said so. The send-back stays as a safety net, untested by the model so far. On the fresh truncated case the agent did not conclude `not_relevant`; it returned `hypothesis_only` (`research_more`), so the new truncation rule did not have to intervene there.
+
+Tests: 235 passed, 2 skipped. CI replays both v2.1 recordings and checks the code's invariants (no support without a checked quote and a verified semantic match; no `evidence_backed` without a credited clearing check; gating never enriches more than the default). Paid in this follow-up: 204¢ LLM, authorized.
+
+Limits unchanged: fictional, single-labeled, small (8 relevant qualified accounts across the two decision sets); not run on real accounts.

@@ -55,7 +55,7 @@ Unknown pain ids and persona names are rejected when the context loads.
 | Which pages to read (including signal pages already found), what to search, when to stop | What a tool may do: only URLs from a search or a known signal page can be read; search windows; budgets checked before each call |
 | Which observations to report, with a stance per pain and a rationale | Whether each observation counts: page read in this run, quote in its text, page about this company, a stated event date present in the quote |
 | That a quote expresses a pain, in any wording | Whether that reading stands: an independent, constrained LLM check sees only the quote and the pain and answers expresses / negates / unrelated / unclear (`SemanticPainMatch`); only `expresses` counts, failures fail closed; the keyword hit is recorded as a diagnostic |
-| Which competing explanation to test and with which search | Whether the check is credited (`DisconfirmationCheck`): the exact query ran as a recent-events search naming the company, and every result was read (or none came back: "not found in checked sources", not proof); a contradiction needs a checked quote from that search's results. `evidence_backed` needs a credited clearing check for the supported pain; a submission without one is sent back once |
+| Which competing explanation to test and with which search | Whether the check is credited (an uncredited check with unread results is sent back once with those URLs) (`DisconfirmationCheck`): the exact query ran as a recent-events search naming the company, and every result was read (or none came back: "not found in checked sources", not proof); a contradiction needs a checked quote from that search's results. `evidence_backed` needs a credited clearing check for the supported pain; a submission without one is sent back once |
 | Alternative explanations and unknowns (kept as its text, labeled) | Each pain's status, the assessment status, the coverage state, the next action, the buying roles |
 | Its own proposed next action (recorded in `agent_view`, not used) | Whether the ICP decision changes: never |
 
@@ -113,7 +113,7 @@ Contrast, `d-freeze-only-via-search`: the signal page supports slow ramp ("redes
 
 ## Measured
 
-On 16 new decision cases (`gtm-lab decision-eval`, labeled before any run of this version): enriching every qualified account bought 15 enrichments, 11 of them for accounts that should not have been enriched; gating on the agent's assessment bought 2, both relevant, at 274¢ in total (simulated contacts plus observed LLM and Exa) against 1200¢, and missed 2 of 4 relevant accounts. Details, the v1 history and the limits: [`agentic-vs-deterministic.md`](agentic-vs-deterministic.md) and [`evals/decisions/REPORT.md`](../evals/decisions/REPORT.md).
+On 12 fresh decision cases (`gtm-lab decision-eval --cases evals/decisions/fresh.yaml --cassette evals/decisions/fresh-cassette.json`, labeled before the run): enriching every qualified account bought 12 enrichments, 8 of them wasted; gating on the agent's assessment bought 4, all relevant, none missed, at 414¢ in total (simulated contacts plus observed LLM and Exa) against 960¢. An earlier version, on 16 other cases, missed 2 of 4 relevant accounts because its prompt did not state the disconfirmation rule; that is fixed and documented. Details, the v1 history and the limits: [`agentic-vs-deterministic.md`](agentic-vs-deterministic.md) and [`evals/decisions/REPORT.md`](../evals/decisions/REPORT.md).
 
 ## Risk boundaries
 
@@ -128,6 +128,6 @@ On 16 new decision cases (`gtm-lab decision-eval`, labeled before any run of thi
 - The subject check matches names and domains; a common-word company name can still match unrelated pages.
 - A disconfirmation search is required before `evidence_backed`, but one search is not exhaustive coverage.
 - Semantic support depends on an LLM check: it is constrained (quote and pain only) and fails closed, but it is a model judgment, not a fact.
-- Clearing a competing explanation requires reading every result of the search; the prompt does not say so yet, which caused the two misses in the decision evaluation.
-- A truncated page is not flagged to the agent; in the evaluation it concluded `not_relevant` from the visible part instead of abstaining.
+- Clearing a competing explanation requires reading every result of the search (stated in the prompt; an uncredited check is sent back with the unread URLs).
+- A truncated page is marked to the agent, and a `not_relevant` conclusion resting only on truncated pages becomes `insufficient_evidence`.
 - The evaluation is small, fictional and labeled by one person; it shows behavior, not business impact.

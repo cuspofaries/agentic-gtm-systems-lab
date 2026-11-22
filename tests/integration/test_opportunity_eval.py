@@ -45,10 +45,27 @@ DECISIONS_CASSETTE = ROOT / "evals" / "decisions" / "cassette.json"
 @pytest.mark.integration
 @pytest.mark.skipif(not DECISIONS_CASSETTE.exists(), reason="no recorded decisions cassette yet")
 def test_decisions_cassette_replays_and_the_code_keeps_control(ctx):
-    from gtm_lab.evaluations.decision_eval import strategies
 
     run = run_eval(DECISIONS, ctx, LLMCassette(DECISIONS_CASSETTE, "replay"))
     assert run.misses == [] and len(run.results) == 16
+    _check_invariants(run, ctx)
+
+
+FRESH = ROOT / "evals" / "decisions" / "fresh.yaml"
+FRESH_CASSETTE = ROOT / "evals" / "decisions" / "fresh-cassette.json"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not FRESH_CASSETTE.exists(), reason="no recorded fresh cassette yet")
+def test_fresh_cassette_replays_and_the_code_keeps_control(ctx):
+    run = run_eval(FRESH, ctx, LLMCassette(FRESH_CASSETTE, "replay"))
+    assert run.misses == [] and len(run.results) == 12
+    _check_invariants(run, ctx)
+
+
+def _check_invariants(run, ctx):
+    from gtm_lab.evaluations.decision_eval import strategies
+
     for r in run.results:
         a = r.agent
         grounded = {o.obs_id for o in a.observed_events if o.check == "quote_found"}
