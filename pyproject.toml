@@ -63,4 +63,5 @@ markers = [
   "integration: multi-component tests using fixtures end-to-end",
   "scenario: named failure/success scenarios from docs/failure-scenarios.md",
   "live_hubspot: hits a real HubSpot test portal; skipped unless GTM_LAB_LIVE_HUBSPOT=1",
+  "real_case: end-to-end run on private real data; skipped unless GTM_LAB_REAL_CASE_DIR is set",
 ]

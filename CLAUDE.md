@@ -50,6 +50,8 @@ ruff check .
 pytest -q
 ```
 
+The end-to-end test on real data (`pytest -m real_case`, see `docs/real-case-test.md`) is skipped unless `GTM_LAB_REAL_CASE_DIR` is set. Record mode spends provider credits: only on explicit request.
+
 ## Claude Code skill
 
 `/gtm-lab` (in `.claude/skills/gtm-lab/`) is the guided entry point: `/gtm-lab`, `/gtm-lab demo`, `/gtm-lab inspect <run-id>`, `/gtm-lab explain <run-id> <account-id>`, `/gtm-lab eval <run-id>`, `/gtm-lab debug <run-id>`, `/gtm-lab approve|reject|sync <run-id>`. See `docs/claude-code.md`.
