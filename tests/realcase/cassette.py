@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import urllib.parse
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
 
 KEPT_RESPONSE_HEADERS = ("x-call-credits-spent", "x-totallimit-remaining", "retry-after")
@@ -54,8 +55,14 @@ class Cassette:
         self.secrets = tuple(s for s in secrets if s)
         self.exchanges: list[dict] = []
         self._queues: dict[str, list[dict]] = defaultdict(list)
+        # When the exchanges were recorded. A replay runs "as of" this moment, so date
+        # windows (signal freshness) give the same answer on any later day.
+        self.recorded_at: datetime = datetime.now(UTC)
         if mode == "replay":
-            self.exchanges = json.loads(self.path.read_text())["exchanges"]
+            data = json.loads(self.path.read_text())
+            self.exchanges = data["exchanges"]
+            if data.get("recorded_at"):
+                self.recorded_at = datetime.fromisoformat(data["recorded_at"])
             for ex in self.exchanges:
                 self._queues[self._key(ex["provider"], ex["method"], ex["url"], ex["body"])].append(ex)
 
@@ -106,7 +113,8 @@ class Cassette:
         return [k for k, q in self._queues.items() for _ in q]
 
     def save(self) -> None:
-        text = json.dumps({"exchanges": self.exchanges}, indent=1, sort_keys=True)
+        text = json.dumps({"recorded_at": self.recorded_at.isoformat(), "exchanges": self.exchanges},
+                          indent=1, sort_keys=True)
         leaked = [i for i, s in enumerate(self.secrets) if s in text]
         if leaked:
             raise AssertionError("an API key would be written to the cassette; nothing saved")
@@ -135,4 +143,7 @@ class Cassette:
                 c["fullenrich"] += int((r.get("cost") or {}).get("credits") or 0)
             elif ex["provider"] == "zerobounce" and "error" not in r and r.get("status") not in (None, "unknown"):
                 c["zerobounce"] += 1
+            elif ex["provider"] == "exa":
+                c["exa_millidollars"] = c.get("exa_millidollars", 0) + round(
+                    float((r.get("costDollars") or {}).get("total") or 0) * 1000)
         return c

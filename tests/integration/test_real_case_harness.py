@@ -127,3 +127,47 @@ def test_a_crm_write_during_planning_fails_the_case(case, fake_network, monkeypa
     _cut_network(monkeypatch)
     with pytest.raises(AssertionError, match="must not change the CRM"):
         run_case(case, "replay", dict.fromkeys(KEYS, "replay"), tmp_path / "s2")
+
+
+def _fake_exa(method, url, headers, body):
+    assert headers["x-api-key"] == "exa-test-key"
+    name = json.loads(body)["query"].split(" (")[0]
+    from datetime import UTC, datetime
+    today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00.000Z")
+    return 200, {"results": [
+        {"url": "https://jobs.lever.co/x/1", "title": f"Account Executive - {name}", "publishedDate": today,
+         "highlights": ["We are hiring"]},
+        {"url": "https://linkedin.com/in/someone", "title": "Someone", "publishedDate": today, "highlights": []},
+    ], "costDollars": {"total": 0.004}}
+
+
+@pytest.mark.integration
+def test_signals_are_recorded_and_replayed_as_of_the_recording_day(case, fake_network, monkeypatch, tmp_path):
+    from gtm_lab.providers import signals as signals_mod
+
+    monkeypatch.setattr(signals_mod, "urllib_transport", _fake_exa)
+    spec = yaml.safe_load((case / "expected.yaml").read_text())
+    spec["run"]["signals"] = "exa"
+    (case / "expected.yaml").write_text(yaml.safe_dump(spec))
+    keys = KEYS | {"EXA_API_KEY": "exa-test-key"}
+
+    observed, _ = run_case(case, "record", keys, tmp_path / "s1", no_wait=True)
+    assert observed["signals_by_kind"] == {"sales_hiring": 3}
+    assert observed["signals_spent_millidollars"] == 12
+    assert observed["credits"]["exa_millidollars"] == 12
+    assert "exa-test-key" not in (case / "cassette.json").read_text()
+
+    spec["expect"] = observed
+    (case / "expected.yaml").write_text(yaml.safe_dump(spec))
+    _cut_network(monkeypatch)
+    monkeypatch.setattr(signals_mod, "urllib_transport", lambda *_a: (_ for _ in ()).throw(AssertionError("network")))
+    _obs, diffs = run_case(case, "replay", dict.fromkeys(keys, "replay"), tmp_path / "s2")
+    assert diffs == {}
+
+    # The search window comes from the recording date, not from today: move that date
+    # and the replayed requests no longer match what was recorded.
+    cassette = json.loads((case / "cassette.json").read_text())
+    cassette["recorded_at"] = "2025-01-01T00:00:00+00:00"
+    (case / "cassette.json").write_text(json.dumps(cassette))
+    with pytest.raises(AssertionError, match="not recorded"):
+        run_case(case, "replay", dict.fromkeys(keys, "replay"), tmp_path / "s3")

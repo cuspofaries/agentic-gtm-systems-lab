@@ -92,6 +92,15 @@ Only used with `--email-finder` or `--email-verifier`. See [`docs/email.md`](ema
 |---|---|---|---|
 | `on_unverified_email` | `keep` or `drop_email` | not set (`keep`) | What to do with emails judged `risky` or `unknown`. `keep` writes them with their verdict shown in the review; `drop_email` removes them. An `invalid` email is always removed. |
 
+### `signals`
+
+Only used with `--signals exa`. See [`docs/signals.md`](signals.md).
+
+| Key | Type | Demo value | Effect |
+|---|---|---|---|
+| `budget_millidollars` | int | not set (`100`) | Spend cap on signal searches per run, in thousandths of a dollar (`100` = $0.10, 25 Exa `lite` searches). Checked before each search against its maximum cost; accounts past the cap are searched no further. Separate from `policy.enrichment_budget_cents`. |
+| `max_results_per_account` | int, 1 to 10 | not set (`5`) | Results asked per account. Exa bills each result above 10, so 10 is the ceiling. |
+
 ### `crm`
 
 Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
@@ -118,6 +127,7 @@ Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
 | `demo` | `--email-finder` | `none` | `fullenrich` finds the work email of contacts that have none. See `docs/email.md`. |
 | `demo` | `--email-verifier` | `none` | `zerobounce` checks every email before the plan. |
 | `demo` | `--email-finder-cents`, `--email-verifier-cents` | `10`, `2` | Budget value of one credit, in cents. Not published prices: set them to your plan's. |
+| `demo` | `--signals` | `none` | `exa` searches the web for dated buying signals per account before qualification (needs `EXA_API_KEY`). See `docs/signals.md`. |
 | `demo`, `runs`, `eval`, `sync` | `--json` | off | Structured output instead of tables. |
 | `demo` | `--max-llm-calls` | `5` | Agentic mode only. Hard cap on LLM calls per run. Past the cap, accounts stay `insufficient_evidence`. |
 | `demo` | `--max-llm-cents` | `50` | Agentic mode only. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |
@@ -141,6 +151,7 @@ The CLI does **not** read a `.env` file. Export these in your shell, or use your
 | `PDL_API_KEY` | unset | People Data Labs key for `--discovery pdl` / `--enrichment pdl`. |
 | `FULLENRICH_API_KEY` | unset | FullEnrich key for `--email-finder fullenrich`. |
 | `ZEROBOUNCE_API_KEY` | unset | ZeroBounce key for `--email-verifier zerobounce`. |
+| `EXA_API_KEY` | unset | Exa key for `--signals exa`. |
 | `HUBSPOT_SERVICE_KEY` | unset | HubSpot Service Key for `--crm hubspot`. `HUBSPOT_ACCESS_TOKEN` is accepted too. |
 | `GTM_LAB_LIVE_HUBSPOT` | unset | Set to `1` to run the live HubSpot test (`pytest -m live_hubspot`). |
 

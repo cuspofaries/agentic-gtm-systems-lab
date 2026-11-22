@@ -100,6 +100,19 @@ def _wrap_emails(base, ctx, finder: str, verifier: str, max_contacts: int,
                          on_unverified=ctx.contacts.on_unverified_email)
 
 
+def _make_signals(signals: str, ctx):
+    if signals == "none":
+        return None
+    if signals == "exa":
+        from .providers.signals import ExaSignalProvider
+
+        key = os.environ.get("EXA_API_KEY")
+        if not key:
+            _fail("Exa selected but EXA_API_KEY is not set.")
+        return ExaSignalProvider(key, max_results=ctx.signals.max_results_per_account)
+    _fail(f"Unknown signal provider '{signals}'. Use 'none' or 'exa'.")
+
+
 def _make_discovery(discovery: str, ctx, example_dir: Path):
     if discovery == "fixture":
         return FixtureDiscoveryProvider(example_dir / "fixtures" / "discovery.yaml")
@@ -124,6 +137,7 @@ def _build_workflow(
     email_verifier: str = "none",
     email_finder_cents: int = 10,
     email_verifier_cents: int = 2,
+    signals: str = "none",
 ) -> AccountDiscoveryWorkflow:
     state_dir.mkdir(parents=True, exist_ok=True)
     ctx = load_context(example_dir / "config" / "gtm-context.yaml")
@@ -140,6 +154,7 @@ def _build_workflow(
         recorder=EventRecorder(state_dir / "events.jsonl"),
         qualifier=DeterministicQualifier(),
         fallback_qualifier=fallback_qualifier,
+        signals=_make_signals(signals, ctx),
     )
 
 
@@ -210,6 +225,7 @@ def demo(
     email_verifier: str = typer.Option("none", "--email-verifier", help="Check every email: none (default) or zerobounce."),
     email_finder_cents: int = typer.Option(10, "--email-finder-cents", help="Budget value of one finder credit, in cents. Set it to your plan's price."),
     email_verifier_cents: int = typer.Option(2, "--email-verifier-cents", help="Budget value of one verifier credit, in cents. Set it to your plan's price."),
+    signals: str = typer.Option("none", "--signals", help="Dated buying signals from the web: none (default) or exa."),
 ):
     """Run the demo end to end. Stops at the human approval gate - no CRM writes."""
     out = err_console if as_json else console
@@ -237,7 +253,12 @@ def demo(
                          discovery=discovery, enrichment=enrichment, profiles_per_account=profiles_per_account,
                          title_levels=[x.strip() for x in title_levels.split(",") if x.strip()] or None,
                          email_finder=email_finder, email_verifier=email_verifier,
-                         email_finder_cents=email_finder_cents, email_verifier_cents=email_verifier_cents)
+                         email_finder_cents=email_finder_cents, email_verifier_cents=email_verifier_cents,
+                         signals=signals)
+    if wf.signals is not None:
+        out.print(f"[cyan]Signals:[/cyan] {wf.signals.name}, up to "
+                  f"${wf.signals.max_cost_millidollars_per_call / 1000:.3f} per account, "
+                  f"budget ${wf.context.signals.budget_millidollars / 1000:.2f}.")
     if enrichment != "fixture" or email_finder != "none" or email_verifier != "none":
         out.print(f"[cyan]Enrichment:[/cyan] {wf.enrichment.name}, up to "
                   f"{wf.enrichment.max_cost_cents_per_call}¢ per account, "

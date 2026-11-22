@@ -16,6 +16,8 @@ Both qualifiers return a fully structured `QualificationDecision`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
 
 from ..context import GTMContext
@@ -31,6 +33,11 @@ class DeterministicQualifier:
     """Rule-based ICP qualifier. No external calls, fully reproducible."""
 
     name = "rules"
+
+    def __init__(self, now: Callable[[], datetime] | None = None):
+        # Signal freshness is judged against `now`. Injected to replay a recorded run as
+        # of the day it was recorded.
+        self._now = now
 
     def qualify(self, account: Account, ctx: GTMContext) -> QualificationDecision:
         evidence: list[str] = []
@@ -108,7 +115,8 @@ class DeterministicQualifier:
             s
             for s in account.signals
             if s.kind in ctx.signal_policy.relevant_kinds
-            and within_window(s.event_date, ctx.signal_policy.max_signal_age_days)
+            and within_window(s.event_date, ctx.signal_policy.max_signal_age_days,
+                              now=self._now() if self._now else None)
         ]
         if fresh_signals:
             evidence.append(f"{len(fresh_signals)} relevant signal(s) within window")

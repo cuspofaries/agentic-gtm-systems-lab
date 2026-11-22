@@ -27,6 +27,9 @@ def render_review(plan: WritePlan, store: RunStore) -> str:
                  f"**Skipped (exists):** {len(skipped_existing)} · "
                  f"**Skipped (ambiguous):** {len(skipped_ambiguous)}")
     lines.append(f"**Enrichment spend:** {plan.enrichment_spent_cents}¢ / {plan.enrichment_budget_cents}¢ cap\n")
+    if plan.signals_budget_millidollars is not None:
+        lines.append(f"**Signal search spend:** ${plan.signals_spent_millidollars / 1000:.3f} / "
+                     f"${plan.signals_budget_millidollars / 1000:.3f} cap\n")
     lines.append("## TL;DR")
     lines.append(f"- {len(approvable)} new CRM account(s) ready to create on approval.")
     lines.append(f"- {sum(len(e.contacts_to_create) for e in approvable)} contact proposal(s) attached.")
@@ -47,6 +50,12 @@ def render_review(plan: WritePlan, store: RunStore) -> str:
                 lines.append(f"- Evidence: {'; '.join(dec.evidence) or '-'}")
                 if dec.missing:
                     lines.append(f"- Missing: {'; '.join(dec.missing)}")
+            if acc and acc.signals:
+                lines.append("- Signals:")
+                for sig in acc.signals:
+                    when = sig.event_date.date().isoformat() if sig.event_date else "undated"
+                    lines.append(f"  - {sig.kind} · {when} · {sig.confidence.value} · {sig.description[:90]}"
+                                 f" · {sig.source.url or sig.source.provider}")
             if e.contacts_to_create:
                 lines.append("- Contacts to create:")
                 for c in e.contacts_to_create:

@@ -23,6 +23,7 @@ run:
   title_levels: [cxo, vp, director]
   email_finder_cents: 10
   email_verifier_cents: 2
+  signals: exa              # optional: also record Exa signal searches (needs EXA_API_KEY)
 ```
 
 ## Two modes
@@ -57,6 +58,7 @@ It fails when a result differs from `expect:`, and it prints each difference. It
 | `enrichment_status` | Per domain: `done`, `budget_exceeded`, `provider_failed` (for example FullEnrich out of credits) or `not_needed`. |
 | `contacts_proposed`, `emails_found` | Contacts in the plan, and how many have an email. |
 | `emails_by_status` | Emails by verdict: `valid`, `risky`, `invalid`, `unknown`. |
+| `signals_by_kind`, `signals_spent_millidollars` | With `run.signals: exa`: signals kept per kind, and what the signal budget was charged. `credits` then also has `exa_millidollars`, read from Exa's answers. |
 | `crm_writes_during_plan` | Must be empty. The test fails on any CRM call that changes data. |
 
 The test only plans. It never approves or syncs, and HubSpot is only read.
@@ -77,6 +79,7 @@ Two private cases were recorded on 2026-11-22, against a HubSpot test portal tha
 
 ## Limits
 
+- A replay runs as of the recording date (`recorded_at` in the cassette): the signal search window and signal freshness are computed from it, so a replay gives the same result months later.
 - A replay shows the providers' answers from the day of recording. It catches changes in this code, not changes in the providers' data.
 - FullEnrich does not charge again for a contact enriched in the last 3 months, so recording the same contacts twice in that window shows 0 FullEnrich credits.
 - The CI runs the same harness against fakes (`tests/integration/test_real_case_harness.py`), so the recording, replay and comparison logic is tested on every push.

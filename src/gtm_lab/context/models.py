@@ -102,6 +102,16 @@ class ContactSettings(BaseModel):
     on_unverified_email: Literal["keep", "drop_email"] = "keep"
 
 
+class SignalSettings(BaseModel):
+    """Buying-signal search (`--signals exa`). Off unless a signal provider is selected."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Spend cap per run, in thousandths of a dollar (one Exa `lite` search costs 4).
+    budget_millidollars: int = Field(default=100, ge=0)
+    max_results_per_account: int = Field(default=5, ge=1, le=10)
+
+
 class GTMContext(BaseModel):
     """The full GTM context, versioned and loadable in one call."""
 
@@ -117,3 +127,4 @@ class GTMContext(BaseModel):
     crm: CRMSettings = Field(default_factory=CRMSettings)
     discovery: DiscoverySettings = Field(default_factory=DiscoverySettings)
     contacts: ContactSettings = Field(default_factory=ContactSettings)
+    signals: SignalSettings = Field(default_factory=SignalSettings)

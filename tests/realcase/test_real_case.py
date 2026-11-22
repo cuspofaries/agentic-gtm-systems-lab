@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from .harness import KEY_VARS, REPLAY_KEYS, run_case
+from .harness import KEY_VARS, OPTIONAL_KEY_VARS, REPLAY_KEYS, run_case
 
 CASE_DIR = os.environ.get("GTM_LAB_REAL_CASE_DIR")
 MODE = os.environ.get("GTM_LAB_REAL_CASE_MODE", "replay")
@@ -44,6 +44,7 @@ def _keys() -> dict[str, str]:
     keys = {v: os.environ.get(v, "") for v in KEY_VARS}
     if not keys["HUBSPOT_SERVICE_KEY"]:
         keys["HUBSPOT_SERVICE_KEY"] = os.environ.get("HUBSPOT_ACCESS_TOKEN", "")
+    keys |= {v: os.environ[v] for v in OPTIONAL_KEY_VARS if os.environ.get(v)}
     missing = [v for v, k in keys.items() if not k]
     if missing:
         pytest.fail(f"record mode needs {', '.join(missing)}")

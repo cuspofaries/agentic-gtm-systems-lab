@@ -187,21 +187,22 @@ Key guarantees:
 
 ## How do I integrate real providers?
 
-Four real providers ship. Each one is off by default and turned on by a flag; its key is read from an environment variable (the CLI does not read `.env` files).
+Five real providers ship. Each one is off by default and turned on by a flag; its key is read from an environment variable (the CLI does not read `.env` files).
 
 | Provider | Role in the workflow | Key (env var) | Flag | Cost | Setup |
 |---|---|---|---|---|---|
 | People Data Labs | Finds companies, then people at each qualified company | `PDL_API_KEY` | `--discovery pdl`, `--enrichment pdl` | 1 credit per record returned; free plan returns no emails | [`docs/pdl.md`](docs/pdl.md) |
 | FullEnrich | Finds the work email of contacts that have none | `FULLENRICH_API_KEY` | `--email-finder fullenrich` | 1 credit per email found, none when nothing is found | [`docs/email.md`](docs/email.md) |
 | ZeroBounce | Checks every email before it can reach the CRM | `ZEROBOUNCE_API_KEY` | `--email-verifier zerobounce` | 1 credit per check, none for `unknown` | [`docs/email.md`](docs/email.md) |
+| Exa | Finds dated buying signals per company (job openings, new sales leaders, funding) | `EXA_API_KEY` | `--signals exa` | $0.004 per search, measured; free tier $10 per month | [`docs/signals.md`](docs/signals.md) |
 | HubSpot | Reconciles the plan against a real portal, then writes approved records | `HUBSPOT_SERVICE_KEY` | `--crm hubspot` | Free test portal | [`docs/hubspot.md`](docs/hubspot.md) |
 
 All of them on one run, against your own context directory (kept out of the repository):
 
 ```bash
-export PDL_API_KEY=... FULLENRICH_API_KEY=... ZEROBOUNCE_API_KEY=... HUBSPOT_SERVICE_KEY=...
+export PDL_API_KEY=... EXA_API_KEY=... FULLENRICH_API_KEY=... ZEROBOUNCE_API_KEY=... HUBSPOT_SERVICE_KEY=...
 gtm-lab crm-setup --crm hubspot          # once per portal, asks for confirmation
-gtm-lab demo --discovery pdl --enrichment pdl \
+gtm-lab demo --discovery pdl --signals exa --enrichment pdl \
   --email-finder fullenrich --email-verifier zerobounce \
   --crm hubspot --limit 15 --profiles-per-account 2 \
   --example-dir path/to/your-context-dir
@@ -213,7 +214,7 @@ To add another vendor, implement the interface it belongs to (`DiscoveryProvider
 
 ## How agentic is it?
 
-Less than the name promises, on purpose for this version. The pipeline is orchestrated by code: discovery, contact search, email steps, reconciliation, policies and sync run in a fixed order with fixed rules. Claude makes one kind of decision, the qualification of accounts the rules cannot decide, under call and spend caps, and it is the conversational interface through the `/gtm-lab` skill.
+Less than the name promises, on purpose for this version. The pipeline is orchestrated by code: discovery, signal search, contact search, email steps, reconciliation, policies and sync run in a fixed order with fixed rules. Claude makes one kind of decision, the qualification of accounts the rules cannot decide, under call and spend caps, and it is the conversational interface through the `/gtm-lab` skill.
 
 There is no agent yet that chooses its own research actions, gathers more evidence when a case is unclear, judges that evidence and changes its plan within a bounded loop. That is the next meaningful step for the "agentic" part; the guardrails here (budget, approval, idempotent writes, audit) are what such a loop would have to run inside.
 
@@ -228,7 +229,7 @@ There is no agent yet that chooses its own research actions, gathers more eviden
 
 ## What should I explore next?
 
-- Add a source of dated buying signals (hiring, leadership changes, funding). Discovery returns companies today, not signals, so `require_signal_for_qualification` cannot be used on real data yet.
+- Turn on `require_signal_for_qualification` with `--signals exa` and compare the qualified set with and without it (see [`docs/signals.md`](docs/signals.md)).
 - Implement a Salesforce `CRMAdapter` on the same pattern as `crm/hubspot.py` (unique external ref, revalidation before each write).
 - Extend `evaluate_entry` with your organization's own hard policies.
 - Write your own `GTMContext` in `config/gtm-context.yaml` for your actual ICP. Every setting, its demo value and its effect are listed in [`docs/configuration.md`](docs/configuration.md). The demo values (50¢ budget, 10¢ per call, 5 LLM calls) only exist to trigger the test scenarios; they are not recommendations.
@@ -265,6 +266,7 @@ agentic-gtm-systems-lab/
 │   ├── hubspot.md                HubSpot connector: setup, behavior, limits
 │   ├── pdl.md                    People Data Labs discovery and contacts
 │   ├── email.md                  FullEnrich email finding, ZeroBounce verification
+│   ├── signals.md                Exa buying signals: checks, kinds, budget
 │   ├── real-case-test.md         end-to-end test on private real data (record once, replay free)
 │   ├── failure-scenarios.md
 │   ├── integration-guide.md
@@ -299,6 +301,7 @@ agentic-gtm-systems-lab/
 | Explicit CRM setup, portal identity checked before sync | Implemented; unit-tested; checked live on a HubSpot test portal |
 | Salesforce adapter | Planned - not implemented |
 | Labeled benchmark for the LLM step | Planned - not implemented |
+| Dated buying signals (Exa) | Implemented; unit-tested against a fake in CI; run on two real companies |
 | Agent choosing its own research steps in a bounded loop | Not implemented (see [How agentic is it?](#how-agentic-is-it)) |
 
 ## Contributing

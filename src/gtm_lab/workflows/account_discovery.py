@@ -38,6 +38,7 @@ from ..observability.events import EventRecorder
 from ..persistence.store import RunStore
 from ..policies.rules import evaluate_entry
 from ..providers.base import DiscoveryProvider, EnrichmentProvider
+from ..providers.signals import SignalProvider
 from ..util import canonicalize_domain, ts_slug
 
 # ---------------------------------------------------------------------------
@@ -128,8 +129,10 @@ class AccountDiscoveryWorkflow:
         recorder: EventRecorder,
         qualifier: Qualifier | None = None,
         fallback_qualifier: Qualifier | None = None,
+        signals: SignalProvider | None = None,
     ):
         self.context = context
+        self.signals = signals
         self.discovery = discovery
         self.enrichment = enrichment
         self.crm = crm
@@ -141,6 +144,36 @@ class AccountDiscoveryWorkflow:
         self.reconciler = Reconciliation()
 
     # --- 1→6: build the plan ---
+
+    def _find_signals(self, run_id: str, accounts: list[Account]) -> int:
+        """Attach dated web signals to each account, within the signal budget.
+
+        Returns what was spent, in thousandths of a dollar. The cap is checked before
+        each call against the most a call can cost, then charged what the provider reports.
+        """
+        if self.signals is None:
+            return 0
+        cap = self.context.signals.budget_millidollars
+        spent = 0
+        for acc in accounts:
+            if spent + self.signals.max_cost_millidollars_per_call > cap:
+                self.recorder.record(run_id, "signals.budget_exceeded",
+                                     {"account_id": acc.account_id, "spent_millidollars": spent,
+                                      "cap_millidollars": cap})
+                continue
+            r = self.signals.find(acc, max_age_days=self.context.signal_policy.max_signal_age_days)
+            spent += r.cost_millidollars
+            acc.signals.extend(r.signals)
+            self.recorder.record(run_id, "signals.account", {
+                "account_id": acc.account_id,
+                "provider": self.signals.name,
+                "kept": [{"kind": s.kind, "date": s.event_date.isoformat() if s.event_date else None,
+                          "url": s.source.url} for s in r.signals],
+                "rejected": dict(r.rejected),
+                "cost_millidollars": r.cost_millidollars,
+                "failures": r.failures,
+            })
+        return spent
 
     def plan(self, *, limit: int = 50, run_id: str | None = None) -> WritePlan:
         run_id = run_id or f"run_{ts_slug()}"
@@ -161,6 +194,7 @@ class AccountDiscoveryWorkflow:
                 "coverage": disc.search_coverage,
             },
         )
+        signals_spent = self._find_signals(run_id, disc.accounts)
         self.store.save_accounts(run_id, disc.accounts)
 
         # 3. Qualification
@@ -325,6 +359,9 @@ class AccountDiscoveryWorkflow:
             enrichment_spent_cents=budget.spent_cents,
             crm_target=self.crm.name,
             crm_identity=self.crm.identity(),
+            signals_budget_millidollars=(self.context.signals.budget_millidollars
+                                         if self.signals is not None else None),
+            signals_spent_millidollars=signals_spent,
         )
         self.store.save_plan(plan)
         self.recorder.record(

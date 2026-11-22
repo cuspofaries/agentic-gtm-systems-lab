@@ -186,6 +186,9 @@ class WritePlan(BaseModel):
     # Which instance of that CRM (e.g. "hubspot:12345678"). None on plans made before it
     # was recorded; such plans can only be synced to the mock.
     crm_identity: str | None = None
+    # Buying-signal search, when a signal provider ran (thousandths of a dollar).
+    signals_budget_millidollars: int | None = None
+    signals_spent_millidollars: int = 0
 
     @property
     def approvable_entries(self) -> list[WritePlanEntry]:

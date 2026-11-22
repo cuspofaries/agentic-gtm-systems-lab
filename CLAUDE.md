@@ -19,6 +19,7 @@ Installed by `pip install -e ".[dev]"` into `.venv` (use `.venv/bin/gtm-lab` if 
 | `gtm-lab demo --crm hubspot` | Same, reconciled against a real HubSpot portal (reads only). Only on explicit request. |
 | `gtm-lab demo --discovery pdl --enrichment pdl` | Real companies and contacts from People Data Labs; spends credits. Only on explicit request. |
 | `gtm-lab demo ... --email-finder fullenrich --email-verifier zerobounce` | Finds and checks contact emails; spends credits. Only on explicit request. |
+| `gtm-lab demo ... --signals exa` | Searches the web for dated buying signals per account; spends Exa credits. Only on explicit request. |
 | `gtm-lab runs [--json]` | List runs, newest first. |
 | `gtm-lab inspect <run-id>` | All persisted state of a run as JSON: `summary`, accounts, decisions, matches, costs, plan, write results, audit events. |
 | `gtm-lab eval <run-id> [--json]` | Four integrity checks. Exit code 1 on failure. |
