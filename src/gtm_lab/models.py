@@ -326,6 +326,45 @@ class RoleHypothesis(BaseModel):
     uncertainty: str = "Hypothetical role from the GTM Brain; no person identified or verified."
 
 
+class SemanticPainMatch(BaseModel):
+    """The agent's reading that a checked quote expresses (or negates) a pain, and its validation.
+
+    The quote itself is checked deterministically (Observation.check). Whether it means the
+    pain is a semantic judgment: the agent proposes it with a rationale, and an
+    independent, constrained LLM check that sees only the quote and the pain confirms or
+    rejects it. A rationale is never evidence on its own.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    match_id: str
+    pain_id: str
+    observation_id: str
+    stance: Literal["supports", "contradicts"]
+    rationale: str  # the agent's text
+    lexical_term_hit: bool  # diagnostic only: does the quote contain one of the pain's evidence_terms
+    validation: Literal["verified", "rejected_by_verifier", "ungrounded", "unverified", "grounded_contradiction"]
+    verifier_verdict: str | None = None
+    verifier_reason: str = ""
+
+
+class DisconfirmationCheck(BaseModel):
+    """One test of a competing explanation, credited only if the code can see it was performed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pain_id: str
+    alternative: str  # e.g. "hiring freeze", "evergreen posting"
+    query: str
+    outcome_claimed: Literal["found_contradiction", "no_contradiction_found", "unresolved"]
+    window: str = "recent_events"
+    results: list[str] = Field(default_factory=list)  # URLs the search returned
+    pages_read: list[str] = Field(default_factory=list)  # of those, pages actually read
+    observation_ids: list[str] = Field(default_factory=list)
+    credited: bool
+    reason: str
+
+
 class OpportunityAssessment(BaseModel):
     """Is there evidence that this account has the problem this offer solves, right now?"""
 
@@ -347,6 +386,8 @@ class OpportunityAssessment(BaseModel):
                                      "no_relevant_evidence"]
     next_action_reason: str
     coverage: Literal["not_attempted", "checked_no_result", "found", "incomplete", "failed"]
+    semantic_matches: list[SemanticPainMatch] = Field(default_factory=list)
+    disconfirmation_checks: list[DisconfirmationCheck] = Field(default_factory=list)
     agent_view: dict = Field(default_factory=dict)  # what the agent itself proposed, for comparison
     unsupported_claims: int = 0  # observations dropped by the checks
     llm_calls: int = 0

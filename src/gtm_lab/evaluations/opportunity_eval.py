@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -67,28 +68,71 @@ def build_inputs(case: dict, defaults: dict) -> tuple[Account, QualificationDeci
     return acc, dec
 
 
+def _page_text(p: dict) -> str:
+    if "text_repeat" in p:
+        r = p["text_repeat"]
+        return r["text"] * int(r["times"]) + p.get("text_after", "")
+    return p.get("text") or ""
+
+
 class FictionalWeb:
-    """Exa stand-in for one case."""
+    """Exa stand-in for one case.
+
+    Query-insensitive (v1 cases): `search` returns every page. Query-sensitive (pages
+    with `keywords` or `noise`): a page is returned only if the query names the company
+    (domain, full name or first word of the name) and shares a word with its keywords;
+    `noise` pages come back for any query naming the company. `search_fails` makes every
+    search fail.
+    """
 
     def __init__(self, case: dict):
+        self.case = case
         self.pages = case.get("pages") or {}
+        self.sensitive = any("keywords" in p or p.get("noise") for p in self.pages.values())
         urls = case.get("results")
+        self.searches: list[tuple[str, list[str]]] = []
+        self.reads: list[str] = []
         self.results = [
             {"url": u, "title": p.get("title", ""),
              "publishedDate": (_date(p.get("days_ago")).strftime("%Y-%m-%dT%H:%M:%S.000Z")
                                if p.get("days_ago") is not None else None),
-             "highlights": [p.get("excerpt") or (p.get("text") or "")[:160]]}
+             "highlights": [p.get("excerpt") or _page_text(p)[:160]]}
             for u, p in self.pages.items() if urls is None or u in urls]
+
+    def _names_company(self, q: str) -> bool:
+        name = self.case["name"].lower()
+        first = name.split()[0]
+        return self.case["domain"].lower() in q or name in q or (len(first) >= 4 and first in q)
+
+    def _matches(self, query: str) -> list[dict]:
+        if not self.sensitive:
+            return self.results
+        q = query.lower()
+        if not self._names_company(q):
+            return []
+        words = set(re.findall(r"[a-z0-9]+", q))
+        keep = []
+        for r in self.results:
+            p = self.pages[r["url"]]
+            if p.get("noise") or words & {k.lower() for k in p.get("keywords", [])}:
+                keep.append(r)
+        return keep
 
     def __call__(self, method, url, headers, body):
         req = json.loads(body)
         if url == EXA_SEARCH_URL:
-            return 200, {"results": self.results, "costDollars": {"total": 0.004}}
+            if self.case.get("search_fails"):
+                return 503, {"error": "search unavailable"}
+            found = self._matches(req.get("query", ""))
+            self.searches.append((req.get("query", ""), [r["url"] for r in found]))
+            return 200, {"results": found, "costDollars": {"total": 0.004}}
         if url == EXA_CONTENTS_URL:
             page = self.pages.get(req["urls"][0])
+            self.reads.append(req["urls"][0])
             if page is None or page.get("fail"):
                 return 502, {"error": "fetch failed"}
-            return 200, {"results": [{"url": req["urls"][0], "text": page["text"]}], "costDollars": {"total": 0.001}}
+            return 200, {"results": [{"url": req["urls"][0], "text": _page_text(page)}],
+                         "costDollars": {"total": 0.001}}
         return 404, None
 
 
@@ -136,12 +180,15 @@ class LLMCassette:
 
 
 class NaiveReader:
-    """Control with no reasoning: read the first signal page, quote its first sentence as
-    support for the offer's first pain. The same code checks then apply. It shows how much
-    of the result comes from the checks alone, without a model."""
+    """Control with no model: read the first signal page, quote its first sentence as support
+    for the offer's first pain, run one recent-events search naming the company, and answer
+    the semantic check by keyword (a supporting quote counts only if it contains one of the
+    pain's evidence_terms). The same code checks apply. It is the conservative code-only
+    path: what the result would be with lexical rules instead of reading."""
 
-    def __init__(self, pain_id: str):
-        self.pain_id, self.messages = pain_id, SimpleNamespace(create=self._create)
+    def __init__(self, pain_id: str, evidence_terms: list[str]):
+        self.pain_id, self.terms = pain_id, [t.lower() for t in evidence_terms]
+        self.messages = SimpleNamespace(create=self._create)
 
     @staticmethod
     def _use(name, inp):
@@ -149,22 +196,45 @@ class NaiveReader:
                                stop_reason="tool_use", usage=SimpleNamespace(input_tokens=0, output_tokens=0))
 
     def _create(self, **kw):
+        if kw["tools"][0]["name"] == "verdict":
+            quote = kw["messages"][0]["content"].split("<quote>")[1].split("</quote>")[0].lower()
+            return self._use("verdict", {"verdict": "expresses" if any(t in quote for t in self.terms)
+                                         else "unrelated", "reason": "keyword rule"})
         msgs = kw["messages"]
+        first = msgs[0]["content"]
+        name = json.loads(first.split("<account_data>\n")[1].split("\n</account_data>")[0])["name"]
         if len(msgs) == 1:
-            signals = json.loads(msgs[0]["content"].split("<result>")[1].split("</result>")[0])
+            signals = json.loads(first.split("<result>")[1].split("</result>")[0])
             url = next((x["url"] for x in signals if x.get("url")), None)
-            return self._use("read", {"url": url}) if url else self._use(
-                "search", {"query": "company news", "purpose": "recent_events"})
-        last = msgs[-1]["content"][0]["content"]
+            if url:
+                return self._use("read", {"url": url})
+        query = f"{name} hiring freeze layoffs"
+        searched = any(isinstance(m["content"], list) and any(
+            b.get("type") == "tool_use" and b.get("name") == "search" for b in m["content"] if isinstance(b, dict))
+            for m in msgs)
+        if not searched:
+            self._page = next((m["content"][0]["content"] for m in msgs[1:] if isinstance(m["content"], list)
+                               and m["content"] and isinstance(m["content"][0], dict)
+                               and str(m["content"][0].get("content", "")).startswith("<page")), None)
+            return self._use("search", {"query": query, "purpose": "recent_events"})
+        page = getattr(self, "_page", None)
         obs = []
-        if last.startswith("<page"):
-            url = last.split('url="')[1].split('"')[0]
-            text = last.split(">", 1)[1]
+        if page:
+            url = page.split('url="')[1].split('"')[0]
+            text = page.split(">", 1)[1]
             obs = [{"event": "signal", "statement": "first sentence", "subject": "", "url": url,
                     "quote": text.split(".")[0][:200], "event_date_stated": "", "stance": "supports",
-                    "pain_id": self.pain_id}]
-        return self._use("submit", {"observations": obs, "alternative_explanations": [], "unknowns": [],
+                    "pain_id": self.pain_id, "rationale": "naive"}]
+        checks = [{"pain_id": self.pain_id, "alternative": "hiring freeze", "query": query,
+                   "outcome": "no_contradiction_found", "observation_ids": []}]
+        return self._use("submit", {"observations": obs, "disconfirmation_checks": checks,
+                                    "alternative_explanations": [], "unknowns": [],
                                     "recommended_next_action": "review", "explanation": "naive control"})
+
+
+def _naive(ctx) -> NaiveReader:
+    pain = next(p for p in ctx.pain_points if p.id == ctx.offers[0].pains[0])
+    return NaiveReader(pain.id, pain.evidence_terms)
 
 
 # --- run -------------------------------------------------------------------------------
@@ -176,6 +246,7 @@ class CaseResult:
     baseline: OpportunityAssessment
     checks_only: OpportunityAssessment
     agent: OpportunityAssessment
+    agent_web: FictionalWeb | None = None
 
 
 @dataclass
@@ -193,15 +264,16 @@ def run_eval(cases_path: Path, ctx: GTMContext, cassette: LLMCassette, *, model:
         budget = ResearchBudget(max_llm_cents=CASE_LLM_CENTS,
                                 max_exa_millidollars=case.get("exa_budget_millidollars", CASE_EXA_MILLIDOLLARS),
                                 **({"model": model} if model else {}))
+        web = FictionalWeb(case)
         agent = OpportunityInvestigator("eval-fixture", client=cassette.for_case(case["id"]),
-                                        exa_transport=FictionalWeb(case), now=lambda: EVAL_NOW, budget=budget,
+                                        exa_transport=web, now=lambda: EVAL_NOW, budget=budget,
                                         max_steps=ctx.research_policy.opportunity_max_steps)
         naive = OpportunityInvestigator(
-            "eval-fixture", client=NaiveReader(ctx.offers[0].pains[0]), exa_transport=FictionalWeb(case),
+            "eval-fixture", client=_naive(ctx), exa_transport=FictionalWeb(case),
             now=lambda: EVAL_NOW, max_steps=ctx.research_policy.opportunity_max_steps,
             budget=ResearchBudget(max_llm_cents=CASE_LLM_CENTS,
                                   max_exa_millidollars=case.get("exa_budget_millidollars", CASE_EXA_MILLIDOLLARS)))
-        out.results.append(CaseResult(case, base, naive.assess(acc, dec, ctx), agent.assess(acc, dec, ctx)))
+        out.results.append(CaseResult(case, base, naive.assess(acc, dec, ctx), agent.assess(acc, dec, ctx), web))
     out.misses = list(cassette.misses)
     return out
 

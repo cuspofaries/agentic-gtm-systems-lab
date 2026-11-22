@@ -194,7 +194,8 @@ class ResearchSession:
             lines.append(f"<result url={json.dumps(url)} date={json.dumps(r.get('publishedDate'))}>"
                          f"{r.get('title') or ''}\n{excerpt}</result>")
         self.trace.append({"tool": "search", "input": query, "purpose": purpose,
-                           "outcome": f"{len(lines)} results", "cost_millidollars": spent})
+                           "outcome": f"{len(lines)} results", "cost_millidollars": spent,
+                           "results": [r.get("url") for r in payload.get("results") or [] if _safe_url(r.get("url") or "")]})
         return "\n".join(lines) or "No results."
 
     def read(self, url: str) -> str:

@@ -36,7 +36,7 @@ cases:
     label: {relevant: true, personas: [Sales Enablement, Revenue Operations]}
 
   - id: d-keyword-stuffing-customers
-    what: "Onboarding" and "ramp" about customers, not sales hires.
+    what: 'Onboarding and ramp about customers, not sales hires.'
     name: Brightwater Billing
     domain: brightwater.example
     signals: [{kind: sales_hiring, title: "Customer Onboarding Specialist - Brightwater Billing", url: "https://brightwater.example/jobs/onboarding", days_ago: 6}]
@@ -157,7 +157,7 @@ cases:
     label: {relevant: null}
 
   - id: d-not-qualified-icp
-    what: Strong evidence, but the ICP said not_qualified: never enriched.
+    what: 'Strong evidence, but the ICP said not_qualified; never enriched.'
     name: Pinecrest Enterprise
     domain: pinecrest.example
     icp: not_qualified

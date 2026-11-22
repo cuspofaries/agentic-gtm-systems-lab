@@ -537,6 +537,52 @@ def opportunity_eval(
         raise typer.Exit(1)
 
 
+@app.command("decision-eval")
+def decision_eval_cmd(
+    cases: Path = typer.Option(Path("evals/decisions/cases.yaml"), "--cases"),
+    cassette: Path = typer.Option(Path("evals/decisions/cassette.json"), "--cassette"),
+    example_dir: Path = typer.Option(DEFAULT_EXAMPLE, "--example-dir"),
+    contact_cents: int = typer.Option(80, "--contact-cents", help="Simulated contact enrichment price per account, in cents."),
+    record: bool = typer.Option(False, "--record", help="Call the Anthropic API for every turn. Spends money."),
+    extend: bool = typer.Option(False, "--extend", help="Record only turns missing from the cassette. Spends money."),
+    report: Path | None = typer.Option(None, "--report"),
+    as_json: bool = typer.Option(False, "--json"),
+):
+    """Compare enrichment strategies (all_qualified, baseline_gated, opportunity_gated) on labeled cases."""
+    from .evaluations.decision_eval import report as decision_report
+    from .evaluations.decision_eval import research_quality, strategies
+    from .evaluations.opportunity_eval import LLMCassette, metrics, report_markdown, run_eval
+
+    ctx = load_context(example_dir / "config" / "gtm-context.yaml")
+    if record or extend:
+        if not _anthropic_credentials_available():
+            _fail("--record and --extend need Anthropic credentials.")
+        import anthropic
+
+        tape = LLMCassette(cassette, "extend" if extend else "record", anthropic.Anthropic())
+    else:
+        if not cassette.exists():
+            _fail(f"No cassette at {cassette}.", "Record one with --record (spends money).")
+        tape = LLMCassette(cassette, "replay")
+    run = run_eval(cases, ctx, tape)
+    if record or extend:
+        from .agents.anthropic_provider import DEFAULT_MODEL
+
+        tape.save(model=DEFAULT_MODEL)
+        err_console.print(f"Recorded {tape.added} new turn(s) into {cassette}.")
+    m = metrics(run)
+    md = decision_report(run, ctx, contact_cents, m) + "\n\n" + report_markdown(run)
+    if report:
+        report.write_text(md + "\n")
+    if as_json:
+        _emit_json({"strategies": strategies(run, ctx, contact_cents), "research_quality": research_quality(run),
+                    "opportunity_metrics": m, "misses": run.misses})
+    else:
+        print(md)
+    if run.misses:
+        raise typer.Exit(1)
+
+
 @app.command()
 def approve(
     run_id: str = typer.Argument(...),
