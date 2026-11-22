@@ -171,3 +171,49 @@ def test_signals_are_recorded_and_replayed_as_of_the_recording_day(case, fake_ne
     (case / "cassette.json").write_text(json.dumps(cassette))
     with pytest.raises(AssertionError, match="not recorded"):
         run_case(case, "replay", dict.fromkeys(keys, "replay"), tmp_path / "s3")
+
+
+@pytest.mark.integration
+def test_research_loop_is_recorded_and_replayed(case, fake_network, monkeypatch, tmp_path):
+    """Claude's turns and the Exa calls of the research loop replay offline, and the
+    replayed loop rebuilds exactly the requests that were recorded."""
+    import anthropic
+
+    from gtm_lab.providers import signals as signals_mod
+    from tests.unit.test_research_loop import FakeExa, ScriptedClaude, _resp, _use
+
+    page = "https://news.example/headcount"
+    exa = FakeExa(results=[{"url": page, "title": "Headcount", "publishedDate": "2026-11-01T00:00:00.000Z",
+                            "highlights": ["about 90 employees"]}],
+                  page_text="The company has about 90 employees in the US.")
+
+    def exa_with_key(method, url, headers, body):
+        return exa(method, url, {**headers, "x-api-key": "exa-key"}, body)
+
+    def turns():
+        return [_resp(_use("search", 1, query="headcount")), _resp(_use("read", 2, url=page)),
+                _resp(_use("submit", 3, decision="qualified", explanation="90 employees",
+                           evidence=[{"url": page, "quote": "about 90 employees in the US"}]))]
+
+    scripted = ScriptedClaude(turns() * 3)
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **_kw: scripted)
+    monkeypatch.setattr(signals_mod, "urllib_transport", exa_with_key)
+    spec = yaml.safe_load((case / "expected.yaml").read_text())
+    spec["run"] |= {"research": "exa", "drop_fields": ["employees"], "enrichment": "none"}
+    (case / "expected.yaml").write_text(yaml.safe_dump(spec))
+    keys = KEYS | {"EXA_API_KEY": "exa-test-key", "ANTHROPIC_API_KEY": "sk-test-anthropic"}
+
+    observed, _ = run_case(case, "record", keys, tmp_path / "s1", no_wait=True)
+    assert set(observed["research_decisions"].values()) == {"qualified"}
+    assert set(observed["research_evidence_kept"].values()) == {1}
+    assert observed["contacts_proposed"] == 0 and observed["research_llm_calls"] == 9
+    text = (case / "cassette.json").read_text()
+    assert "sk-test-anthropic" not in text and "exa-test-key" not in text
+
+    spec["expect"] = observed
+    (case / "expected.yaml").write_text(yaml.safe_dump(spec))
+    _cut_network(monkeypatch)
+    monkeypatch.setattr(signals_mod, "urllib_transport", lambda *_a: (_ for _ in ()).throw(AssertionError("net")))
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **_kw: (_ for _ in ()).throw(AssertionError("net")))
+    _obs, diffs = run_case(case, "replay", dict.fromkeys(keys, "replay"), tmp_path / "s2")
+    assert diffs == {}

@@ -18,9 +18,30 @@ import urllib.parse
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 KEPT_RESPONSE_HEADERS = ("x-call-credits-spent", "x-totallimit-remaining", "retry-after")
 SECRET_FORM_FIELDS = ("api_key",)
+
+
+def _plain(obj):
+    return obj.model_dump(exclude_none=True) if hasattr(obj, "model_dump") else vars(obj)
+
+
+def _response_to_dict(r) -> dict:
+    blocks = []
+    for b in r.content:
+        if b.type == "tool_use":
+            blocks.append({"type": "tool_use", "id": b.id, "name": b.name, "input": b.input})
+        elif b.type == "text":
+            blocks.append({"type": "text", "text": b.text})
+    usage = {"input_tokens": r.usage.input_tokens, "output_tokens": r.usage.output_tokens}
+    return {"content": blocks, "stop_reason": r.stop_reason, "usage": usage}
+
+
+def _dict_to_response(d: dict):
+    return SimpleNamespace(content=[SimpleNamespace(**b) for b in d["content"]], stop_reason=d["stop_reason"],
+                           usage=SimpleNamespace(**d["usage"]))
 
 
 class CassetteMissError(AssertionError):
@@ -54,6 +75,7 @@ class Cassette:
         self.path, self.mode = Path(path), mode
         self.secrets = tuple(s for s in secrets if s)
         self.exchanges: list[dict] = []
+        self.misses: list[str] = []
         self._queues: dict[str, list[dict]] = defaultdict(list)
         # When the exchanges were recorded. A replay runs "as of" this moment, so date
         # windows (signal freshness) give the same answer on any later day.
@@ -75,6 +97,8 @@ class Cassette:
         key = self._key(provider, method, url, clean)
         if self.mode == "replay":
             if not self._queues[key]:
+                # Kept as well as raised: a caller may catch the error and fail closed.
+                self.misses.append(f"{provider} {method} {url}")
                 raise CassetteMissError(f"not recorded: {provider} {method} {url}")
             ex = self._queues[key].pop(0)
             return ex["status"], ex["response"], dict(ex["headers"])
@@ -105,6 +129,27 @@ class Cassette:
             status, payload, _ = self._exchange(provider, method, url, body, real)
             return status, payload
         return transport
+
+    def anthropic(self, real_client):
+        """A stand-in for `anthropic.Anthropic()` that records `messages.create` calls.
+
+        A request is keyed by its model, its tools and its last message (the prompt, or
+        the tool results the loop just built); in a replay the same code path rebuilds
+        the same last message. Only the parts of a response the loop reads are stored.
+        """
+        def create(**kw):
+            last = kw["messages"][-1]["content"]
+            body = json.dumps({"model": kw.get("model"), "tools": [t["name"] for t in kw.get("tools", [])],
+                               "last": last}, sort_keys=True, default=_plain).encode()
+
+            def real():
+                r = real_client.messages.create(**kw)
+                return 200, _response_to_dict(r), {}
+
+            _status, payload, _ = self._exchange("anthropic", "POST", "messages.create", body, real)
+            return _dict_to_response(payload)
+
+        return SimpleNamespace(messages=SimpleNamespace(create=create))
 
     # ------------------------------------------------------------------------------
 
@@ -143,6 +188,10 @@ class Cassette:
                 c["fullenrich"] += int((r.get("cost") or {}).get("credits") or 0)
             elif ex["provider"] == "zerobounce" and "error" not in r and r.get("status") not in (None, "unknown"):
                 c["zerobounce"] += 1
+            elif ex["provider"] == "anthropic":
+                u = r.get("usage") or {}
+                c["anthropic_input_tokens"] = c.get("anthropic_input_tokens", 0) + int(u.get("input_tokens", 0))
+                c["anthropic_output_tokens"] = c.get("anthropic_output_tokens", 0) + int(u.get("output_tokens", 0))
             elif ex["provider"] == "exa":
                 c["exa_millidollars"] = c.get("exa_millidollars", 0) + round(
                     float((r.get("costDollars") or {}).get("total") or 0) * 1000)

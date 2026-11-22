@@ -26,6 +26,19 @@ run:
   signals: exa              # optional: also record Exa signal searches (needs EXA_API_KEY)
 ```
 
+Optional settings for the research loop (`docs/research.md`):
+
+```yaml
+  research: exa             # record Claude's turns and the loop's Exa calls (needs ANTHROPIC_API_KEY, EXA_API_KEY)
+  research_steps: 6
+  research_llm_cents: 30
+  research_exa_millidollars: 20
+  enrichment: none          # skip contact search and emails, to spend only on the research
+  drop_fields: [employees]  # blank fields on purpose so the rules cannot decide and the loop runs
+```
+
+Real providers rarely leave the rules undecided, so `drop_fields` simulates the gap. A case that uses it says so; its results measure the research loop, not the providers' coverage.
+
 ## Two modes
 
 **Record** calls People Data Labs, FullEnrich, ZeroBounce and HubSpot for real, so it spends credits. The most it can spend is set by `limit`, `profiles_per_account` and `policy.enrichment_budget_cents`.
@@ -59,6 +72,8 @@ It fails when a result differs from `expect:`, and it prints each difference. It
 | `contacts_proposed`, `emails_found` | Contacts in the plan, and how many have an email. |
 | `emails_by_status` | Emails by verdict: `valid`, `risky`, `invalid`, `unknown`. |
 | `signals_by_kind`, `signals_spent_millidollars` | With `run.signals: exa`: signals kept per kind, and what the signal budget was charged. `credits` then also has `exa_millidollars`, read from Exa's answers. |
+| `research_decisions`, `research_evidence_kept`, `research_missing`, `research_errors` | With `run.research: exa`: the decision per researched domain, how many quotes were verified, why a decision stayed open, and any API error. |
+| `research_llm_calls`, `research_llm_cents`, `research_exa_millidollars` | What the loop spent. `credits` then also has `anthropic_input_tokens` and `anthropic_output_tokens`, read from the API's answers. |
 | `crm_writes_during_plan` | Must be empty. The test fails on any CRM call that changes data. |
 
 The test only plans. It never approves or syncs, and HubSpot is only read.
@@ -76,6 +91,9 @@ Two private cases were recorded on 2026-11-22, against a HubSpot test portal tha
 - **Companies already in the CRM.** A search whose 9 matching companies had all been synced before: 9 found in HubSpot, 9 skipped, no contact searched, nothing written. Cost: PDL company credits only.
 - **New companies.** A search for smaller companies (38 matching, 4 requested): 4 accounts to create, 2 enriched before the budget stopped the other 2 (`budget_exceeded`). One contact got an email that FullEnrich rated `HIGH_PROBABILITY` and ZeroBounce `valid`. For the other, FullEnrich ran out of credits (`provider_failed`) and the contact stayed in the plan without an email. Credits reported in the providers' answers matched their balances: FullEnrich 1, ZeroBounce 1, PDL 4 companies and 2 people. Budget charged: 68 cents (2 x 28 + 10 + 2).
 - **Check the total before asking for more.** PDL's answer carries `total` (matching companies). Raising `limit` above it returns nothing new and still costs one credit per record; read it, and the CRM's existing records, before re-recording.
+
+- **Research loop.** Two companies with their headcount blanked on purpose. One stayed `insufficient_evidence` (two sources: 189 and about 431 employees, on either side of the band); the other was `qualified` on two quotes found in pages Claude read. 6 LLM calls, 14¢ charged (each call is rounded up to the cent; the tokens come to about 11¢), Exa $0.012. Replays exactly, offline.
+- **A bug only a recording could find.** The first research recording stopped after one turn per account: the loop sent the client's own response objects back to the API, which works with the SDK's objects and fails with anything else. The loop now sends plain request blocks, and a replay that hits an unrecorded call fails the case even when the code catches the error.
 
 ## Limits
 

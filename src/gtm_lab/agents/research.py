@@ -118,6 +118,17 @@ def _dump(obj: Any):
     return obj.model_dump() if hasattr(obj, "model_dump") else str(obj)
 
 
+def _as_params(content: list) -> list[dict]:
+    """The assistant turn as plain request blocks, whatever object the client returned."""
+    out = []
+    for b in content:
+        if b.type == "tool_use":
+            out.append({"type": "tool_use", "id": b.id, "name": b.name, "input": b.input})
+        elif b.type == "text" and b.text:
+            out.append({"type": "text", "text": b.text})
+    return out
+
+
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
@@ -190,7 +201,7 @@ class ResearchQualifier:
             if not uses:
                 return self._undecided(account, "research_no_decision", "The model stopped without submitting.")
 
-            messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "assistant", "content": _as_params(response.content)})
             results = []
             for use in uses:
                 steps += 1

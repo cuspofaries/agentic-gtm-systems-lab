@@ -55,4 +55,7 @@ Every researched account gets a `qualification.fallback` event with the baseline
 
 ## Testing
 
+The end-to-end test on real data can record and replay the loop (`run.research: exa`, see [`real-case-test.md`](real-case-test.md)): Claude's answers and the Exa calls are stored, and a replay rebuilds the same requests offline.
+
+
 `tests/unit/test_research_loop.py` scripts Claude's turns with a fake client and fakes Exa: the full search, read, submit path; quotes not in the page; evidence from a page never read; URLs not from a search; the step cap; both budgets; refusals, truncation, missing answers and API errors; and the events written by the workflow.
