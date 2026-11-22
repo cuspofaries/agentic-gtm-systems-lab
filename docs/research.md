@@ -43,7 +43,7 @@ Two runs on 2026-11-22 with Claude Opus 5.5 and Exa, on two real companies whose
 
 - **First run:** for both companies Claude ran one search and submitted quotes taken from the search excerpts, without reading the pages. The code dropped every item (no page read) and both accounts stayed `insufficient_evidence`. Cost: 4 LLM calls, 6¢; Exa $0.008.
 - **Fix:** the prompt now says that excerpts are not evidence, and a submit whose evidence all fails is sent back once (as a tool error) while at least two tool calls remain, so Claude can read and resubmit.
-- **Second run:** Claude searched once and read two pages per company, then submitted with quotes that the code found in the pages. One company had sources that disagree (189 and about 431 employees, one below the band and one inside it); Claude answered `insufficient_evidence` with both quotes. The other had 258 and about 435, both in the band: `qualified`. Cost: 6 LLM calls, 13¢; Exa $0.012.
+- **Second run:** Claude searched once and read two pages per company before submitting, so the send-back was not needed (it is covered by a unit test). It submitted with quotes that the code found in the pages. One company had sources that disagree (189 and about 431 employees, one below the band and one inside it); Claude answered `insufficient_evidence` with both quotes. The other had 258 and about 435, both in the band: `qualified`. Cost: 6 LLM calls, 13¢; Exa $0.012.
 
 ## What it does not guarantee
 
