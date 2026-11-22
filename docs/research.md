@@ -33,9 +33,17 @@ Evidence is checked against what was actually read:
 - the URL must have been read with `read` in this loop (a search excerpt does not count);
 - the quote, whitespace and case aside, must appear in that page's text and be at least 8 characters.
 
-Items that fail are dropped and counted in `missing` (`research_evidence_unverified`). A `qualified` or `not_qualified` answer with no item left becomes `insufficient_evidence` (`research_no_verified_evidence`). Kept items appear in the decision's evidence as `url: "quote" (quote found in the page read)`.
+Items that fail are dropped and counted in `missing` (`research_evidence_unverified`). If every item of a `qualified` or `not_qualified` answer fails and at least two tool calls remain, the answer is sent back once as a tool error asking Claude to read the pages and resubmit; the event shows it as `rejected_unverified_evidence`. A `qualified` or `not_qualified` answer with no item left becomes `insufficient_evidence` (`research_no_verified_evidence`). Kept items appear in the decision's evidence as `url: "quote" (quote found in the page read)`.
 
 API errors, refusals, a turn cut by the output cap and a missing answer all leave the account `insufficient_evidence`, with the reason in `missing`.
+
+## Measured on the real API
+
+Two runs on 2026-11-22 with Claude Opus 5.5 and Exa, on two real companies whose headcount was marked missing (ICP band 200 to 999 employees):
+
+- **First run:** for both companies Claude ran one search and submitted quotes taken from the search excerpts, without reading the pages. The code dropped every item (no page read) and both accounts stayed `insufficient_evidence`. Cost: 4 LLM calls, 6¢; Exa $0.008.
+- **Fix:** the prompt now says that excerpts are not evidence, and a submit whose evidence all fails is sent back once (as a tool error) while at least two tool calls remain, so Claude can read and resubmit.
+- **Second run:** Claude searched once and read two pages per company, then submitted with quotes that the code found in the pages. One company had sources that disagree (189 and about 431 employees, one below the band and one inside it); Claude answered `insufficient_evidence` with both quotes. The other had 258 and about 435, both in the band: `qualified`. Cost: 6 LLM calls, 13¢; Exa $0.012.
 
 ## What it does not guarantee
 

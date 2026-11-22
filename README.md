@@ -306,7 +306,7 @@ agentic-gtm-systems-lab/
 | Salesforce adapter | Planned - not implemented |
 | Labeled benchmark for the LLM step | Planned - not implemented |
 | Dated buying signals (Exa) | Implemented; unit-tested against a fake in CI; run on two real companies |
-| Agent choosing its own research steps in a bounded loop (`--research exa`) | Implemented; tested with a scripted Claude client and a fake Exa in CI; not yet run against the real API |
+| Agent choosing its own research steps in a bounded loop (`--research exa`) | Implemented; tested with a scripted Claude client and a fake Exa in CI; run against the real API on two real companies |
 
 ## Contributing
 

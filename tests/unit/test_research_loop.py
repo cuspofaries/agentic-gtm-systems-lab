@@ -106,19 +106,36 @@ def test_tools_are_strict_and_not_forced(context):
 def test_a_quote_not_in_the_page_does_not_count(context):
     turns = [*GOOD[:2], _resp(_use("submit", 3, decision="qualified", explanation="x",
                                    evidence=[{"url": PAGE_URL, "quote": "employs 180 people"}]))]
-    agent, _ = _agent(turns)
+    agent, _ = _agent(turns, max_steps=3)  # last step: no resubmission
     d = agent.qualify(_account(), context)
     assert d.decision == "insufficient_evidence"
     assert "research_no_verified_evidence" in d.missing and d.evidence == []
 
 
+EXCERPT_SUBMIT = _resp(_use("submit", 2, decision="qualified", explanation="x",
+                            evidence=[{"url": PAGE_URL, "quote": "now employs 140 people"}]))
+
+
 @pytest.mark.unit
 def test_evidence_from_a_page_never_read_does_not_count(context):
-    turns = [GOOD[0], _resp(_use("submit", 2, decision="qualified", explanation="x",
-                                 evidence=[{"url": PAGE_URL, "quote": "now employs 140 people"}]))]
-    agent, _ = _agent(turns)
+    agent, _ = _agent([GOOD[0], EXCERPT_SUBMIT], max_steps=3)  # no room left to read and resubmit
     d = agent.qualify(_account(), context)  # the excerpt says it, but the page was not read
     assert d.decision == "insufficient_evidence"
+    assert agent.last_trace[-1]["submitted"] == "qualified"
+
+
+@pytest.mark.unit
+def test_unverified_submit_is_sent_back_once_to_read_the_page(context):
+    # Measured on the real API: Claude quoted search excerpts without reading the pages.
+    turns = [GOOD[0], EXCERPT_SUBMIT, _resp(_use("read", 3, url=PAGE_URL)),
+             _resp(_use("submit", 4, decision="qualified", explanation="x",
+                        evidence=[{"url": PAGE_URL, "quote": "now employs 140 people"}]))]
+    agent, client = _agent(turns)
+    d = agent.qualify(_account(), context)
+    assert d.decision == "qualified" and len(d.evidence) == 1
+    assert [s.get("outcome") for s in agent.last_trace][1] == "rejected_unverified_evidence"
+    sent_back = client.requests[2]["messages"][-1]["content"][0]
+    assert sent_back["is_error"] and "read" in sent_back["content"]
 
 
 @pytest.mark.unit
