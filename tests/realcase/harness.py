@@ -112,6 +112,10 @@ def build(case: Path, cassette: Cassette, run: dict, keys: dict, state_dir: Path
         fallback_qualifier=research,
         crm=crm, store=RunStore(state_dir / "runs.sqlite"), recorder=NullRecorder(),
         qualifier=DeterministicQualifier(now=as_of))
+    kind = "replayed" if cassette.mode == "replay" else "recorded"
+    for component in (discovery.inner, people, finder, verifier, crm, signals, research, wf.enrichment):
+        if component is not None:
+            component.execution_kind = kind
     return wf, discovery
 
 

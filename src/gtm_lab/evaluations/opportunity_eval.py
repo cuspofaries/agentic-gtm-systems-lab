@@ -278,6 +278,8 @@ def run_eval(cases_path: Path, ctx: GTMContext, cassette: LLMCassette, *, model:
             now=lambda: EVAL_NOW, max_steps=ctx.research_policy.opportunity_max_steps,
             budget=ResearchBudget(max_llm_cents=CASE_LLM_CENTS,
                                   max_exa_millidollars=case.get("exa_budget_millidollars", CASE_EXA_MILLIDOLLARS)))
+        agent.execution_kind = "replayed" if cassette.mode == "replay" else "recorded"
+        naive.execution_kind = "simulated"
         out.results.append(CaseResult(case, base, naive.assess(acc, dec, ctx), agent.assess(acc, dec, ctx), web))
     out.misses = list(cassette.misses)
     return out

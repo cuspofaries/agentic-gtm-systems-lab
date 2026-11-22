@@ -21,6 +21,7 @@ import secrets
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from .. import execution
 from ..agents.opportunity import OpportunityInvestigator, baseline_assessment
 from ..agents.qualifier import DeterministicQualifier, Qualifier
 from ..context import GTMContext
@@ -239,8 +240,19 @@ class AccountDiscoveryWorkflow:
         self.recorder.record(
             run_id,
             "workflow.start",
-            {"limit": limit, "llm_fallback_configured": self.fallback_qualifier is not None},
+            {"limit": limit, "llm_fallback_configured": self.fallback_qualifier is not None,
+             "configured": {
+                 "fallback_qualifier": type(self.fallback_qualifier).__name__ if self.fallback_qualifier else None,
+                 "opportunity": self.opportunity is not None,
+                 "signals": getattr(self.signals, "name", None) if self.signals else None,
+                 "discovery": getattr(self.discovery, "name", None),
+                 "enrichment": getattr(self.enrichment, "name", None),
+                 "enrichment_strategy": self.enrichment_strategy,
+                 "crm": getattr(self.crm, "name", None),
+             }},
         )
+        fallback_before = execution.snapshot(self.fallback_qualifier)
+        opportunity_before = execution.snapshot(self.opportunity)
 
         # 2. Discovery
         disc = self.discovery.discover(limit=limit)
@@ -471,6 +483,11 @@ class AccountDiscoveryWorkflow:
             signals_spent_millidollars=signals_spent,
         )
         self.store.save_plan(plan)
+        # What actually ran, per component; read back by run summaries after a restart.
+        self.recorder.record(run_id, "execution.summary", execution.build(
+            workflow=self, plan=plan, accounts=disc.accounts, decisions=decisions,
+            assessments=self.store.load_assessments(run_id), fallback_before=fallback_before,
+            opportunity_before=opportunity_before))
         self.recorder.record(
             run_id,
             "plan.proposed",

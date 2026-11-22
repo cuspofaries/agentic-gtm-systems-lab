@@ -36,6 +36,13 @@ def brief_json(run_id: str, store: RunStore) -> list[dict]:
     return list(rows.values())
 
 
+def _execution(run_id: str, store: RunStore) -> dict | None:
+    from .observability.events import EventRecorder
+
+    events = EventRecorder(store.db_path.parent / "events.jsonl").read(run_id)
+    return next((e["payload"] for e in events if e["event_type"] == "execution.summary"), None)
+
+
 def _date(d) -> str:
     return d.date().isoformat() if d else "no date"
 
@@ -87,6 +94,15 @@ def render_brief(run_id: str, store: RunStore) -> str:
     if not rows:
         lines.append("No opportunity assessment in this run (run `gtm-lab demo` with `--opportunity exa`).")
         return "\n".join(lines)
+    ex = _execution(run_id, store)
+    if ex:
+        o = ex["components"]["opportunity_intelligence"]
+        e = ex["components"]["contact_enrichment"]
+        lines.append(f"**Run:** opportunity investigation {o['kind'] or 'not configured'}, {o['accounts']} account(s), "
+                     f"{o['llm_calls']} LLM call(s), {o['llm_cost_cents']}¢ LLM, "
+                     f"{o['exa_cost_millidollars']} thousandths of a dollar of Exa; contact enrichment "
+                     f"({e['strategy']}, {e['kind']}): {e['calls']} call(s), {e['cost_cents']}¢, "
+                     f"{e['deferred_by_policy']} deferred by policy.\n")
     for row in rows:
         agent = assessments.get((row["account_id"], "agent"))
         base = assessments.get((row["account_id"], "baseline"))

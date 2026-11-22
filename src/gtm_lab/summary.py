@@ -36,6 +36,21 @@ def state_paths(state_dir: Path, run_id: str) -> dict[str, str]:
     }
 
 
+def _mode(exec_summary: dict | None, start: dict) -> str:
+    """offline: nothing called a real service. agentic: Claude was called. live_providers:
+    real providers or a real CRM were called, Claude was not."""
+    if exec_summary is None:
+        return "agentic" if start.get("llm_fallback_configured") else "offline"
+    if exec_summary["llm_calls_total"] and any(
+            exec_summary["components"][k].get("kind") in ("live", "recorded")
+            for k in ("llm_qualifier", "company_research", "opportunity_intelligence")
+            if exec_summary["components"][k].get("llm_calls")):
+        return "agentic"
+    if exec_summary["llm_calls_total"]:
+        return "agentic_replayed"
+    return "offline" if exec_summary["offline"] else "live_providers"
+
+
 def run_summary(run_id: str, state_dir: Path) -> dict | None:
     store = RunStore(state_dir / "runs.sqlite")
     plan = store.load_plan(run_id)
@@ -49,14 +64,18 @@ def run_summary(run_id: str, state_dir: Path) -> dict | None:
     start = next((e["payload"] for e in events if e["event_type"] == "workflow.start"), {})
     discovery = next((e["payload"] for e in events if e["event_type"] == "discovery.complete"), {})
     fallbacks = [e["payload"] for e in events if e["event_type"] == "qualification.fallback"]
+    exec_summary = next((e["payload"] for e in events if e["event_type"] == "execution.summary"), None)
     paths = state_paths(state_dir, run_id)
 
     in_plan = {e.account_id for e in plan.entries}
     status = plan.status.value
     return {
         "run_id": run_id,
-        "mode": "agentic" if start.get("llm_fallback_configured") else "offline",
-        "llm_calls_made": len(fallbacks),
+        # From what ran, not from what was configured (runs older than execution.summary fall
+        # back to the configuration-based reading, flagged as such).
+        "mode": _mode(exec_summary, start),
+        "llm_calls_made": exec_summary["llm_calls_total"] if exec_summary else len(fallbacks),
+        "execution": exec_summary or {"legacy": True, "note": "run recorded before execution metadata existed"},
         "plan_status": status,
         "next_step": NEXT_STEPS.get(status, ""),
         "crm": plan.crm_target,

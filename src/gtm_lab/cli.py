@@ -356,6 +356,12 @@ def demo(
         return
 
     console.print(f"[green]Plan proposed:[/green] run_id=[bold]{plan.run_id}[/bold]")
+    _s = run_summary(plan.run_id, state_dir)
+    _e = _s.get("execution", {})
+    if not _e.get("legacy"):
+        console.print(f"Execution: {_s['mode']} · LLM calls {_e['llm_calls_total']} ({_e['llm_cost_cents_total']}¢) · "
+                      f"Exa {_e['exa_cost_millidollars_total']} thousandths of a dollar · "
+                      f"contacts {_e['contact_cost_cents_total']}¢ · live: {', '.join(_e['live_components']) or 'none'}")
     if credits is not None:
         console.print(f"{wf.enrichment.name} credits remaining: {credits}")
     console.print(f"Review artifact → {review_path}")
