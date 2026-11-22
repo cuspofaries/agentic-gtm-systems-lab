@@ -2,7 +2,7 @@
 
 Every value you can change, where it lives, what the demo uses, and what it actually does.
 
-The demo values were chosen to exercise the 13 test scenarios on a small synthetic fixture. **They are not recommendations and none of the prices are real provider prices.** Set your own before pointing this at real data.
+The demo values were chosen to exercise the 13 test scenarios on a small synthetic fixture. **They are not recommendations.** The fixture prices are invented; real provider prices are documented next to each provider setting below. Set your own before pointing this at real data.
 
 There are four places to configure things:
 

@@ -1,6 +1,6 @@
 # agentic-gtm-systems-lab
 
-A reference implementation of one GTM workflow: account discovery → ICP qualification → CRM reconciliation → budget-capped enrichment → human approval → sync. The data is synthetic and the CRM is a local SQLite mock. It is a lab, not a production pipeline.
+A reference implementation of one GTM workflow: account discovery → ICP qualification → CRM reconciliation → budget-capped enrichment → human approval → sync. By default the data is synthetic and the CRM is a local SQLite mock; real providers (People Data Labs, FullEnrich, ZeroBounce, HubSpot) are opt-in flags. It is a lab, not a production pipeline.
 
 ## Where things are
 

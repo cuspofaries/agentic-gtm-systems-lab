@@ -61,7 +61,7 @@ gtm-lab approve <run-id>      # promote plan to APPROVED
 gtm-lab sync <run-id>         # apply to the mock CRM (run it twice: the second run is all no-ops)
 gtm-lab eval <run-id>         # run 4 integrity checks
 
-pytest -q                     # 77 tests pass (1 live HubSpot test skipped unless opted in)
+pytest -q                     # offline suite; the live HubSpot test is skipped unless opted in
 ```
 
 Choose this for scripts, CI, or to reuse the Python components without Claude Code.
@@ -191,6 +191,12 @@ Each provider is an interface (`DiscoveryProvider`, `EnrichmentProvider`, `CRMAd
 
 A HubSpot adapter ships: `gtm-lab demo --crm hubspot`, then approve and sync as usual. It was run end to end against a HubSpot test portal; see [`docs/hubspot.md`](docs/hubspot.md) for setup and the HubSpot behaviors it has to work around. See [`docs/integration-guide.md`](docs/integration-guide.md) for outlines of other adapters (Clay, Apollo, Salesforce).
 
+## How agentic is it?
+
+Less than the name promises, on purpose for this version. The pipeline is orchestrated by code: discovery, contact search, email steps, reconciliation, policies and sync run in a fixed order with fixed rules. Claude makes one kind of decision, the qualification of accounts the rules cannot decide, under call and spend caps, and it is the conversational interface through the `/gtm-lab` skill.
+
+There is no agent yet that chooses its own research actions, gathers more evidence when a case is unclear, judges that evidence and changes its plan within a bounded loop. That is the next meaningful step for the "agentic" part; the guardrails here (budget, approval, idempotent writes, audit) are what such a loop would have to run inside.
+
 ## What are the limitations?
 
 - **Offline by default.** The demo uses fixtures and a mock CRM; real providers (HubSpot, People Data Labs) are opt-in flags.
@@ -202,7 +208,7 @@ A HubSpot adapter ships: `gtm-lab demo --crm hubspot`, then approve and sync as 
 
 ## What should I explore next?
 
-- Add a real `DiscoveryProvider` (start with a Crunchbase / BuiltIn fixture → live API).
+- Add a source of dated buying signals (hiring, leadership changes, funding). Discovery returns companies today, not signals, so `require_signal_for_qualification` cannot be used on real data yet.
 - Implement a Salesforce `CRMAdapter` on the same pattern as `crm/hubspot.py` (unique external ref, revalidation before each write).
 - Extend `evaluate_entry` with your organization's own hard policies.
 - Write your own `GTMContext` in `config/gtm-context.yaml` for your actual ICP. Every setting, its demo value and its effect are listed in [`docs/configuration.md`](docs/configuration.md). The demo values (50¢ budget, 10¢ per call, 5 LLM calls) only exist to trigger the test scenarios; they are not recommendations.
@@ -213,7 +219,7 @@ A HubSpot adapter ships: `gtm-lab demo --crm hubspot`, then approve and sync as 
 agentic-gtm-systems-lab/
 ├── src/gtm_lab/
 │   ├── context/                  ← YAML loader + Pydantic context models
-│   ├── providers/                ← DiscoveryProvider / EnrichmentProvider + fixtures
+│   ├── providers/                ← interfaces, fixtures, People Data Labs, FullEnrich + ZeroBounce
 │   ├── crm/                      ← CRMAdapter + SQLite mock + HubSpot adapter
 │   ├── agents/                   ← DeterministicQualifier + LLMQualifier + Claude provider
 │   ├── workflows/                ← Orchestrator + Reconciliation + EnrichmentBudget
@@ -222,13 +228,13 @@ agentic-gtm-systems-lab/
 │   ├── observability/            ← JSONL event recorder
 │   ├── evaluations/              ← Post-run integrity checks
 │   ├── review.py                 ← Markdown review artifact renderer
-│   └── cli.py                    ← Typer CLI (6 commands)
+│   └── cli.py                    ← Typer CLI (demo, runs, inspect, eval, approve, reject, crm-setup, sync)
 ├── examples/account-discovery-to-crm/
 │   ├── config/gtm-context.yaml
 │   └── fixtures/{discovery,enrichment,crm-seed}.yaml
 ├── tests/
-│   ├── unit/                     ← 49 unit tests (incl. HubSpot adapter against a fake)
-│   ├── integration/              ← 15 tests: end-to-end, no-network, CLI and Claude Code skill checks
+│   ├── unit/                     ← components, and every real provider against a fake transport
+│   ├── integration/              ← end-to-end, no-network, CLI and Claude Code skill checks
 │   ├── scenarios/                ← 13 named failure scenarios
 │   └── live/                     ← opt-in test against a real HubSpot portal
 ├── docs/
@@ -252,22 +258,26 @@ agentic-gtm-systems-lab/
 
 | Capability | Status |
 |---|---|
-| Account discovery (fixture) | Implemented and tested |
+| Account discovery: fixture | Implemented and tested |
+| Account discovery: People Data Labs | Implemented; unit-tested against a fake in CI; run end to end on real companies |
 | ICP qualification (rules) | Implemented and tested |
 | ICP qualification (LLM, ambiguous cases only) | Implemented, unit-tested with a fake client, not run live in CI |
 | CRM reconciliation | Implemented and tested |
 | Enrichment budget | Implemented and tested |
 | Human approval gate | Implemented and tested |
-| Idempotent CRM sync + revalidation after approval | Implemented and tested (mock CRM) |
+| Idempotent CRM sync + revalidation after approval | Implemented and tested on the mock CRM; run end to end on a HubSpot test portal |
 | State persistence | Implemented and tested |
 | Audit trail | Implemented and tested |
 | 13 failure scenarios | All 13 tested and green |
 | Claude Code skill `/gtm-lab` | Implemented; files checked in CI; invoked for real in Claude Code print mode (not the interactive UI) |
 | Structured CLI output (`--json`, `inspect`) | Implemented and tested |
 | HubSpot adapter (companies, contacts) | Implemented; unit-tested against a fake in CI; run end to end against a HubSpot test portal (opt-in live test) |
-| People Data Labs discovery and contacts | Implemented; unit-tested against a fake in CI; run end to end with HubSpot on real companies (free plan: no emails) |
+| People Data Labs contacts | Implemented; unit-tested against a fake in CI; run end to end with HubSpot on real companies (free plan: no emails) |
+| Email finding (FullEnrich) and verification (ZeroBounce) | Implemented; unit-tested against fakes in CI; run live on three real contacts (not yet in a full run) |
+| Explicit CRM setup, portal identity checked before sync | Implemented; unit-tested; checked live on a HubSpot test portal |
 | Salesforce adapter | Planned - not implemented |
 | Labeled benchmark for the LLM step | Planned - not implemented |
+| Agent choosing its own research steps in a bounded loop | Not implemented (see [How agentic is it?](#how-agentic-is-it)) |
 
 ## Contributing
 

@@ -87,5 +87,5 @@ Measured on a test portal, not assumed:
 ## Limits
 
 - Companies and contacts only. No deals, owners or custom objects.
-- Discovery and enrichment are still the synthetic fixtures. Only the CRM side is real.
+- With the default fixtures, only the CRM side is real. For real companies and contacts, add `--discovery pdl --enrichment pdl` (see [`pdl.md`](pdl.md)).
 - The search lag window above is a real race against other writers.
