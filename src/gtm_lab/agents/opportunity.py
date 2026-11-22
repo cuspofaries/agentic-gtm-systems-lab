@@ -270,8 +270,9 @@ class OpportunityInvestigator:
         calls = [t for t in session.trace if t.get("tool") in ("search", "read")]
         succeeded = any(t.get("cost_millidollars") is not None for t in calls)
         failed = any(str(t.get("outcome", "")).startswith(("HTTP", "error")) for t in calls)
-        coverage = ("found" if valid else "incomplete" if exhausted else
-                    "failed" if failed and not succeeded else
+        # A source that failed means not everything was seen: never "checked, no result".
+        coverage = ("found" if valid else "incomplete" if exhausted or (failed and succeeded) else
+                    "failed" if failed else
                     "checked_no_result" if succeeded else "not_attempted")
         suggested = _suggested_pains(ctx, offer, _fresh_kinds(account, ctx, self.now()))
         if "supported" in by:

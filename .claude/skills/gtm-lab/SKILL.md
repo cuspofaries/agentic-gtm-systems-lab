@@ -1,7 +1,7 @@
 ---
 name: gtm-lab
 description: Guided entry point to the agentic GTM lab. Runs, inspects, explains, evaluates and debugs the account-discovery-to-CRM workflow through its existing gtm-lab CLI. Approval and sync only on explicit user request.
-argument-hint: "[demo | inspect <run-id> | explain <run-id> <account-id> | eval <run-id> | debug <run-id> | approve|reject|sync <run-id>]"
+argument-hint: "[demo | inspect <run-id> | explain <run-id> <account-id> | opportunity <run-id> | eval <run-id> | debug <run-id> | approve|reject|sync <run-id>]"
 disable-model-invocation: true
 allowed-tools:
   - Read
@@ -15,6 +15,8 @@ allowed-tools:
   - Bash(.venv/bin/gtm-lab inspect *)
   - Bash(gtm-lab eval *)
   - Bash(.venv/bin/gtm-lab eval *)
+  - Bash(gtm-lab opportunity *)
+  - Bash(.venv/bin/gtm-lab opportunity *)
 ---
 
 # /gtm-lab
@@ -53,6 +55,10 @@ Label each statement: **observed** (account fields as returned by the provider),
 ### explain <run-id> <account-id>
 
 Use only `gtm-lab inspect <run-id>`. For that account, report: the decision and its `evidence` and `missing` lists; whether an LLM was consulted (a `qualification.fallback` event, or `decided_by: llm`); why enrichment ran or not (`enrichment_status`, `enrichment.*` events, `costs`); the CRM action and why (`skip_reason`, `policy_failures`, `matches`); and what happened at sync (`write_results`). If the account is not in the run, say so. Do not guess missing values.
+
+### opportunity <run-id>
+
+Run `gtm-lab opportunity <run-id> --json` (reads persisted state only; it spends nothing). For each account, report in this order and keep the labels: ICP decision (unchanged by the assessment); observed evidence (quote, URL, dates: a quote shows what a page says, not that it is true); hypotheses (inferences); counterevidence and unknowns; buying roles (hypothetical roles, never people); the next action and its reason; coverage and cost. Put the baseline's verdict next to the agent's. If the run has no assessment, say that it needs `gtm-lab demo --opportunity exa`, which is paid (see LLM mode). Never propose contact enrichment or outreach as if it were decided: `consider_persona_enrichment` is a suggestion for the user.
 
 ### eval <run-id>
 
@@ -96,5 +102,7 @@ State the evidence for each finding. Never modify state to fix it.
 ## LLM mode
 
 `gtm-lab demo --agentic` makes paid Anthropic API calls from Python, separate from this conversation. Run it only if the user asks for it explicitly. Before running it, state that it needs `ANTHROPIC_API_KEY` (or an `ant auth login` profile), that it is capped by default at 5 calls and 50 cents (`--max-llm-calls`, `--max-llm-cents`), and that it only sees accounts the rules could not decide. Then get a yes.
+
+`gtm-lab demo --opportunity exa` is paid in the same way (Claude and Exa, per new qualified account, capped by `research_policy.opportunity_max_accounts` and `opportunity_max_steps`, `--max-llm-cents`, `--opportunity-exa-millidollars`). Same rule: explicit request, state the caps, get a yes. `gtm-lab opportunity-eval` replays a recorded cassette for free; `--record` is paid.
 
 `gtm-lab demo --research exa` makes paid calls too: Claude through the Anthropic API and Exa searches, in a loop per undecided account. Same rule: only on explicit request. Before running it, state that it needs `ANTHROPIC_API_KEY` and `EXA_API_KEY`, and its caps: `--research-steps` (default 6 tool calls per account), `--max-llm-cents` (default 50) and `--research-exa-millidollars` (default 50, that is $0.05). Then get a yes. To explain a researched decision, read the `steps` of its `qualification.fallback` event in `inspect`.

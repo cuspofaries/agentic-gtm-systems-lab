@@ -229,11 +229,18 @@ class ResearchSession:
             return "page_not_read", None
         if len(norm(quote)) < 8 or norm(quote) not in norm(page.text):
             return "quote_not_found", page
-        # The page must be about this company: on its domain, naming its domain, its name in
-        # the title, or its name in the quote itself.
+        # The page must be about this company: on its domain, or naming its domain or its
+        # full name in the title, the quote or the text read. A page that names only another
+        # company ("Northwind Logistics" for "Northwind Analytics") fails.
+        # Measured on the evaluation's first recording: requiring the name in the title or
+        # quote rejected pages whose title used a short name ("Talvo names new VP of Sales")
+        # but whose text named the company in full.
         names = [a for a in exa._anchors(self.account) if a != self.account.domain.lower()]
-        in_quote = any(exa._word(n, quote) for n in names) or exa._word(self.account.domain.lower(), quote)
-        if exa._about(self.account, page.title, page.text, url) is not None and not in_quote:
+        text = f"{page.title} {quote} {page.text}"
+        named = any(exa._word(n, text) for n in names) or exa._word(self.account.domain.lower(), text)
+        host = (urlparse(url).hostname or "").lower()
+        domain = self.account.domain.lower()
+        if not (named or host == domain or host.endswith("." + domain)):
             return "subject_mismatch", page
         return "quote_found", page
 

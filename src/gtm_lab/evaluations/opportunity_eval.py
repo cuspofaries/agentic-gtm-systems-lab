@@ -244,6 +244,8 @@ def metrics(run: EvalRun) -> dict:
             m["roles_checked"] = len(rel)
             m["roles_match"] = sum({x.role_id for x in r.agent.buying_roles} == set(r.case["label"].get("roles", []))
                                    for r in rel)
+            m["roles_include_labeled"] = sum(set(r.case["label"].get("roles", [])) <= {x.role_id for x in r.agent.buying_roles}
+                                             for r in rel)
             m["llm_calls"] = sum(r.agent.llm_calls for r in run.results)
             m["llm_cents"] = sum(r.agent.llm_cents for r in run.results)
             m["exa_millidollars"] = sum(r.agent.exa_millidollars for r in run.results)
@@ -283,7 +285,8 @@ def report_markdown(run: EvalRun) -> str:
               f"- Coverage state correct where labeled: {rate(a['coverage_correct'], a['coverage_labeled'])}",
               f"- Next action correct where labeled: {rate(a['next_action_correct'], a['next_action_labeled'])}",
               f"- Buying roles equal to the labeled set, on correctly found relevant cases: "
-              f"{rate(a['roles_match'], a['roles_checked'])}",
+              f"{rate(a['roles_match'], a['roles_checked'])}; include every labeled role: "
+              f"{rate(a['roles_include_labeled'], a['roles_checked'])}",
               f"- Status different from the baseline: {rate(a['decision_changed_vs_baseline'], a['cases'])}",
               f"- Cost: {a['llm_calls']} LLM calls, {a['llm_cents']}¢ LLM (per-call rounding up), "
               f"${a['exa_millidollars'] / 1000:.3f} fictional Exa; {a['llm_cents'] / max(a['cases'], 1):.1f}¢ per case",
