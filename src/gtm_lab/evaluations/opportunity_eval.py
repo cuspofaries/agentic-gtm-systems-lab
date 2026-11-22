@@ -97,8 +97,12 @@ class LLMCassette:
 
     def __init__(self, path: Path, mode: str, real_client=None):
         self.path, self.mode, self.real = Path(path), mode, real_client
-        self.data: dict = json.loads(self.path.read_text()) if mode == "replay" else {"turns": {}}
-        self.case_id, self.turn, self.misses = "", 0, []
+        # replay: recorded turns only. record: every turn from the API (a new cassette).
+        # extend: recorded turns replayed, missing ones called and added (after a code change
+        # that alters some conversations).
+        self.data: dict = (json.loads(self.path.read_text()) if mode in ("replay", "extend") and self.path.exists()
+                           else {"turns": {}})
+        self.case_id, self.turn, self.misses, self.added = "", 0, [], 0
 
     def for_case(self, case_id: str):
         self.case_id, self.turn = case_id, 0
@@ -108,12 +112,13 @@ class LLMCassette:
         self.turn += 1
         last = json.dumps(kw["messages"][-1]["content"], sort_keys=True, default=str)
         key = f"{self.case_id}#{self.turn}#{hashlib.sha256(last.encode()).hexdigest()[:16]}"
-        if self.mode == "replay":
+        if self.mode == "replay" or (self.mode == "extend" and key in self.data["turns"]):
             if key not in self.data["turns"]:
                 self.misses.append(key)
                 raise LookupError(f"not recorded: {key}")
             d = self.data["turns"][key]
         else:
+            self.added += 1
             r = self.real.messages.create(**kw)
             d = {"content": [({"type": "tool_use", "id": b.id, "name": b.name, "input": b.input} if b.type == "tool_use"
                               else {"type": "text", "text": getattr(b, "text", "")}) for b in r.content

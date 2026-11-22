@@ -133,6 +133,12 @@ def _fresh_kinds(account: Account, ctx: GTMContext, now: datetime | None) -> set
             if within_window(s.event_date, ctx.signal_policy.max_signal_age_days, now=now)}
 
 
+def _disconfirmation_searched(session) -> bool:
+    """A recent-events search ran and returned (whatever it found)."""
+    return any(t.get("tool") == "search" and t.get("purpose") == "recent_events"
+               and t.get("cost_millidollars") is not None for t in session.trace)
+
+
 # --- baseline ------------------------------------------------------------------------
 
 
@@ -217,9 +223,24 @@ class OpportunityInvestigator:
                 + "\n\nSignals already found this run (pages you may read without searching):\n"
                 + "<result>" + json.dumps(signals, default=str) + "</result>"
                 + f"\n\nYou have {self.max_steps} tool calls in total, including `submit`.")
+        sent_back = False
+
+        def on_submit(args: dict, steps: int) -> str | None:
+            # Code-enforced disconfirmation: before supporting evidence can stand, at least
+            # one search for recent events must have run (a freeze, layoffs, an incumbent
+            # tool are often on another page). Sent back once, while two calls remain.
+            nonlocal sent_back
+            supports = any(o.get("stance") == "supports" for o in args.get("observations") or [])
+            if supports and not _disconfirmation_searched(session) and not sent_back and steps + 2 <= self.max_steps:
+                sent_back = True
+                return ("Before concluding, run at least one `search` with purpose recent_events for news that "
+                        "could contradict this (hiring freeze, layoffs, an evergreen posting, an incumbent tool), "
+                        "read what is relevant, then submit again.")
+            return None
+
         status, result = run_loop(client=self.client, budget=self.budget, system=SYSTEM_PROMPT, user=user,
                                   tools=[SEARCH_TOOL, READ_TOOL, _submit_tool(offer)], session=session,
-                                  max_steps=self.max_steps, on_submit=lambda _a, _s: None)
+                                  max_steps=self.max_steps, on_submit=on_submit)
         cost = {"llm_calls": self.budget.llm_calls - calls0, "llm_cents": self.budget.llm_spent_cents - llm0,
                 "exa_millidollars": self.budget.exa_spent_millidollars - exa0}
         if status == "stopped":
@@ -275,7 +296,10 @@ class OpportunityInvestigator:
                     "failed" if failed else
                     "checked_no_result" if succeeded else "not_attempted")
         suggested = _suggested_pains(ctx, offer, _fresh_kinds(account, ctx, self.now()))
-        if "supported" in by:
+        disconfirmed = _disconfirmation_searched(session)
+        if "supported" in by and not disconfirmed:
+            status = "needs_research"  # support found, but nobody looked for contrary evidence
+        elif "supported" in by:
             status = "evidence_backed"
         elif "mixed" in by:
             status = "needs_research"
@@ -288,6 +312,9 @@ class OpportunityInvestigator:
         if status == "evidence_backed":
             action = "consider_persona_enrichment" if qualified else "review"
             reason = "Checked quotes support " + ", ".join(h.pain_id for h in hyps if h.status == "supported") + "."
+        elif status == "needs_research" and not disconfirmed and "supported" in by:
+            action, reason = "research_more", ("Checked quotes support a pain, but no search for contradicting "
+                                               "recent events was run; evidence-backed requires one.")
         elif status == "needs_research":
             action, reason = "research_more", "Sources support and contradict the same pain."
         elif status == "not_relevant":

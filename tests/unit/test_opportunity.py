@@ -67,6 +67,7 @@ def _agent(turns, web=None, **kw):
 
 
 READ_JOB = _resp(_use("read", 1, url=JOB))
+SEARCH_EVENTS = _resp(_use("search", 5, query="acme analytics hiring freeze layoffs", purpose="recent_events"))
 
 
 @pytest.mark.unit
@@ -84,11 +85,11 @@ def test_baseline_without_signals_is_not_a_negative_verdict(context):
 
 @pytest.mark.unit
 def test_supported_pain_from_a_page_read_a_known_signal_page(context):
-    agent, _, web = _agent([READ_JOB, _submit(2, _obs("rebuilding sales onboarding to cut ramp time"))])
+    agent, _, web = _agent([READ_JOB, SEARCH_EVENTS, _submit(2, _obs("rebuilding sales onboarding to cut ramp time"))])
     a = agent.assess(_account(), _decision(), context)
     assert a.assessment_status == "evidence_backed" and a.coverage == "found"
     assert a.recommended_next_action == "consider_persona_enrichment"
-    assert web.calls == [EXA_CONTENTS_URL]  # the signal page was read without a new search
+    assert web.calls == [EXA_CONTENTS_URL, EXA_SEARCH_URL]  # signal page read without searching for it
     assert {r.role_id for r in a.buying_roles} == {"enablement-owner", "revops-stakeholder"}
     assert all("hypothetical" in r.uncertainty.lower() for r in a.buying_roles)
     assert a.icp_decision == "qualified" and a.alternative_explanations == ["could be backfill"]
@@ -96,7 +97,7 @@ def test_supported_pain_from_a_page_read_a_known_signal_page(context):
 
 @pytest.mark.unit
 def test_a_hiring_quote_without_the_pain_terms_is_not_support(context):
-    agent, _, _ = _agent([READ_JOB, _submit(2, _obs("is hiring five Sales Development Representatives"))])
+    agent, _, _ = _agent([READ_JOB, SEARCH_EVENTS, _submit(2, _obs("is hiring five Sales Development Representatives"))])
     a = agent.assess(_account(), _decision(), context)
     assert a.observed_events[0].stance == "unresolved"
     # A checked observation exists but does not establish the pain: look further, conclude nothing.
@@ -105,7 +106,7 @@ def test_a_hiring_quote_without_the_pain_terms_is_not_support(context):
 
 @pytest.mark.unit
 def test_quote_from_an_unread_page_is_dropped(context):
-    agent, _, _ = _agent([_submit(1, _obs("rebuilding sales onboarding to cut ramp time"))])
+    agent, _, _ = _agent([SEARCH_EVENTS, _submit(1, _obs("rebuilding sales onboarding to cut ramp time"))])
     a = agent.assess(_account(), _decision(), context)
     assert a.observed_events[0].check == "page_not_read" and a.unsupported_claims == 1
     assert a.assessment_status != "evidence_backed"
@@ -113,7 +114,8 @@ def test_quote_from_an_unread_page_is_dropped(context):
 
 @pytest.mark.unit
 def test_a_date_the_quote_does_not_state_is_rejected(context):
-    agent, _, _ = _agent([READ_JOB, _submit(2, _obs("rebuilding sales onboarding to cut ramp time", date="March 2026"))])
+    agent, _, _ = _agent([READ_JOB, SEARCH_EVENTS,
+                          _submit(2, _obs("rebuilding sales onboarding to cut ramp time", date="March 2026"))])
     a = agent.assess(_account(), _decision(), context)
     assert a.observed_events[0].check == "date_not_in_quote"
 
@@ -134,8 +136,29 @@ def test_support_and_contradiction_mean_research_more(context):
 
 
 @pytest.mark.unit
+def test_support_without_a_disconfirmation_search_is_sent_back_once(context):
+    # Measured in the evaluation: the agent concluded from one page and missed a newer freeze.
+    turns = [READ_JOB, _submit(2, _obs("rebuilding sales onboarding to cut ramp time")), SEARCH_EVENTS,
+             _submit(4, _obs("rebuilding sales onboarding to cut ramp time"))]
+    agent, client, web = _agent(turns)
+    a = agent.assess(_account(), _decision(), context)
+    sent = client.requests[2]["messages"][-1]["content"][0]
+    assert sent["is_error"] and "recent_events" in sent["content"]
+    assert a.assessment_status == "evidence_backed" and EXA_SEARCH_URL in web.calls
+
+
+@pytest.mark.unit
+def test_support_without_any_disconfirmation_search_cannot_be_evidence_backed(context):
+    turns = [READ_JOB, _submit(2, _obs("rebuilding sales onboarding to cut ramp time"))]
+    agent, _, _ = _agent(turns, max_steps=3)  # no room to search and resubmit
+    a = agent.assess(_account(), _decision(), context)
+    assert a.assessment_status == "needs_research" and a.recommended_next_action == "research_more"
+    assert "no search for contradicting" in a.next_action_reason
+
+
+@pytest.mark.unit
 def test_undecided_icp_is_never_promoted(context):
-    agent, _, _ = _agent([READ_JOB, _submit(2, _obs("rebuilding sales onboarding to cut ramp time"))])
+    agent, _, _ = _agent([READ_JOB, SEARCH_EVENTS, _submit(2, _obs("rebuilding sales onboarding to cut ramp time"))])
     a = agent.assess(_account(), _decision("insufficient_evidence"), context)
     assert a.icp_decision == "insufficient_evidence"
     assert a.recommended_next_action == "review"  # not persona enrichment
@@ -174,7 +197,7 @@ def test_brief_and_cli_show_persisted_assessments(make_workflow, state_dir):
     from gtm_lab.cli import app
     from gtm_lab.opportunity_brief import render_brief
 
-    turns = [READ_JOB, _submit(2, _obs("rebuilding sales onboarding to cut ramp time"))] * 10
+    turns = [READ_JOB, SEARCH_EVENTS, _submit(2, _obs("rebuilding sales onboarding to cut ramp time"))] * 10
     agent, _, _ = _agent(turns)
     wf = make_workflow()
     wf.opportunity = agent

@@ -488,6 +488,7 @@ def opportunity_eval(
     cassette: Path = typer.Option(Path("evals/opportunity/cassette.json"), "--cassette"),
     example_dir: Path = typer.Option(DEFAULT_EXAMPLE, "--example-dir"),
     record: bool = typer.Option(False, "--record", help="Call the Anthropic API and write the cassette. Spends money."),
+    extend: bool = typer.Option(False, "--extend", help="Replay recorded turns and record only the missing ones. Spends money."),
     report: Path | None = typer.Option(None, "--report", help="Also write the Markdown report to this file."),
     as_json: bool = typer.Option(False, "--json"),
 ):
@@ -495,21 +496,22 @@ def opportunity_eval(
     from .evaluations.opportunity_eval import LLMCassette, metrics, report_markdown, run_eval
 
     ctx = load_context(example_dir / "config" / "gtm-context.yaml")
-    if record:
+    if record or extend:
         if not _anthropic_credentials_available():
-            _fail("--record needs Anthropic credentials.")
+            _fail("--record and --extend need Anthropic credentials.")
         import anthropic
 
-        tape = LLMCassette(cassette, "record", anthropic.Anthropic())
+        tape = LLMCassette(cassette, "extend" if extend else "record", anthropic.Anthropic())
     else:
         if not cassette.exists():
             _fail(f"No cassette at {cassette}.", "Record one with --record (spends money).")
         tape = LLMCassette(cassette, "replay")
     run = run_eval(cases, ctx, tape)
-    if record:
+    if record or extend:
         from .agents.anthropic_provider import DEFAULT_MODEL
 
         tape.save(model=DEFAULT_MODEL)
+        err_console.print(f"Recorded {tape.added} new turn(s) into {cassette}.")
     md = report_markdown(run)
     if report:
         report.write_text(md + "\n")
