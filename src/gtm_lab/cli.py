@@ -229,6 +229,9 @@ def demo(
     research: str = typer.Option("none", "--research", help="Research undecided accounts in a bounded tool loop: none (default) or exa. Uses Claude and Exa; spends money."),
     research_steps: int = typer.Option(6, "--research-steps", help="Research only: max tool calls per account."),
     research_exa_millidollars: int = typer.Option(50, "--research-exa-millidollars", help="Research only: Exa spend cap per run, in thousandths of a dollar."),
+    opportunity: str = typer.Option("none", "--opportunity", help="Assess product-specific opportunity on new qualified accounts before enrichment: none (default) or exa. Uses Claude and Exa; spends money."),
+    opportunity_include_undecided: bool = typer.Option(False, "--opportunity-include-undecided", help="Also assess accounts the ICP left insufficient_evidence (never promotes them)."),
+    opportunity_exa_millidollars: int = typer.Option(50, "--opportunity-exa-millidollars", help="Opportunity only: Exa spend cap per run, in thousandths of a dollar."),
 ):
     """Run the demo end to end. Stops at the human approval gate - no CRM writes."""
     out = err_console if as_json else console
@@ -273,12 +276,36 @@ def demo(
                   f"insufficient_evidence (max {research_steps} steps each; caps {max_llm_cents}¢ LLM, "
                   f"${research_exa_millidollars / 1000:.3f} Exa).")
 
+    investigator = None
+    if opportunity != "none":
+        if opportunity != "exa":
+            _fail(f"Unknown opportunity mode '{opportunity}'. Use 'none' or 'exa'.")
+        if not os.environ.get("EXA_API_KEY"):
+            _fail("Opportunity selected but EXA_API_KEY is not set.")
+        if not _anthropic_credentials_available():
+            _fail("Opportunity needs Anthropic credentials (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN "
+                  "or an `ant auth login` profile).")
+        from .agents.opportunity import OpportunityInvestigator
+
+        ctx_preview = load_context(example_dir / "config" / "gtm-context.yaml")
+        if not ctx_preview.offers:
+            _fail("--opportunity needs `offers` in gtm-context.yaml (see docs/opportunity-intelligence.md).")
+        rp = ctx_preview.research_policy
+        investigator = OpportunityInvestigator(os.environ["EXA_API_KEY"], max_steps=rp.opportunity_max_steps,
+                                               max_llm_cents=max_llm_cents,
+                                               max_exa_millidollars=opportunity_exa_millidollars)
+        out.print(f"[cyan]Opportunity:[/cyan] {investigator.model} assesses up to {rp.opportunity_max_accounts} new "
+                  f"qualified account(s) for offer '{ctx_preview.offers[0].id}' (max {rp.opportunity_max_steps} steps "
+                  f"each; caps {max_llm_cents}¢ LLM, ${opportunity_exa_millidollars / 1000:.3f} Exa).")
+
     wf = _build_workflow(example_dir, state_dir, fallback_qualifier=fallback, crm=crm,
                          discovery=discovery, enrichment=enrichment, profiles_per_account=profiles_per_account,
                          title_levels=[x.strip() for x in title_levels.split(",") if x.strip()] or None,
                          email_finder=email_finder, email_verifier=email_verifier,
                          email_finder_cents=email_finder_cents, email_verifier_cents=email_verifier_cents,
                          signals=signals)
+    wf.opportunity = investigator
+    wf.opportunity_include_undecided = opportunity_include_undecided
     if wf.signals is not None:
         out.print(f"[cyan]Signals:[/cyan] {wf.signals.name}, up to "
                   f"${wf.signals.max_cost_millidollars_per_call / 1000:.3f} per account, "
@@ -297,6 +324,10 @@ def demo(
         _fail(f"CRM error while planning against {CRM_LABELS[crm]}: {e}")
     review_path = state_dir / f"review_{plan.run_id}.md"
     review_path.write_text(render_review(plan, wf.store))
+    if investigator is not None:
+        from .opportunity_brief import render_brief
+
+        (state_dir / f"opportunity_{plan.run_id}.md").write_text(render_brief(plan.run_id, wf.store))
 
     credits = getattr(wf.enrichment, "credits_remaining", None)
     if as_json:
@@ -335,6 +366,10 @@ def demo(
         )
     console.print(t)
 
+    if investigator is not None:
+        b = investigator.budget
+        console.print(f"Opportunity brief → {state_dir / f'opportunity_{plan.run_id}.md'} "
+                      f"({b.llm_calls} LLM call(s), {b.llm_spent_cents}¢; Exa ${b.exa_spent_millidollars / 1000:.3f})")
     if research_agent is not None:
         console.print(f"Research: {research_agent.llm_calls} LLM call(s), {research_agent.llm_spent_cents}¢; "
                       f"Exa ${research_agent.exa_spent_millidollars / 1000:.3f}"
@@ -427,6 +462,24 @@ def inspect(
     if data is None:
         _fail(f"No run '{run_id}' in {state_dir}.", "List runs with `gtm-lab runs`.")
     _emit_json(data)
+
+
+@app.command()
+def opportunity(
+    run_id: str = typer.Argument(...),
+    state_dir: Path = typer.Option(DEFAULT_STATE_DIR, "--state-dir"),
+    as_json: bool = typer.Option(False, "--json", help="Structured output instead of Markdown."),
+):
+    """Show the Account Opportunity Brief of a run. Reads persisted state only."""
+    from .opportunity_brief import brief_json, render_brief
+
+    store = RunStore(state_dir / "runs.sqlite")
+    if store.load_plan(run_id) is None:
+        _fail(f"No run '{run_id}' in {state_dir}.", "List runs with `gtm-lab runs`.")
+    if as_json:
+        _emit_json({"run_id": run_id, "accounts": brief_json(run_id, store)})
+    else:
+        print(render_brief(run_id, store))
 
 
 @app.command()

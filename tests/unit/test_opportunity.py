@@ -165,3 +165,35 @@ def test_workflow_assesses_new_qualified_accounts_before_enrichment(make_workflo
     assert {a.assessed_by for a in stored} == {"agent", "baseline"}
     decisions = {d.account_id: d.decision for d in wf.store.load_decisions(plan.run_id)}
     assert all(decisions[a.account_id] == a.icp_decision for a in stored)  # ICP untouched
+
+
+@pytest.mark.unit
+def test_brief_and_cli_show_persisted_assessments(make_workflow, state_dir):
+    from typer.testing import CliRunner
+
+    from gtm_lab.cli import app
+    from gtm_lab.opportunity_brief import render_brief
+
+    turns = [READ_JOB, _submit(2, _obs("rebuilding sales onboarding to cut ramp time"))] * 10
+    agent, _, _ = _agent(turns)
+    wf = make_workflow()
+    wf.opportunity = agent
+    acc = _account()
+
+    class OneAccount:
+        name = "one"
+
+        def discover(self, *, limit):
+            from gtm_lab.providers.base import ProviderResult
+            return ProviderResult(accounts=[acc.model_copy(deep=True)])
+
+    wf.discovery = OneAccount()
+    plan = wf.plan(limit=1, run_id="brief")
+    md = render_brief(plan.run_id, wf.store)
+    assert "Baseline (signal kind only, no AI)" in md and "`evidence_backed`" in md
+    assert '"rebuilding sales onboarding to cut ramp time"' in md and "no person identified" in md
+    res = CliRunner().invoke(app, ["opportunity", plan.run_id, "--json", "--state-dir", str(state_dir)])
+    assert res.exit_code == 0, res.output
+    data = json.loads(res.output)
+    assert data["accounts"][0]["agent"]["assessment_status"] == "evidence_backed"
+    assert data["accounts"][0]["baseline"]["assessed_by"] == "baseline"
