@@ -494,8 +494,10 @@ def opportunity(
 
 @app.command("opportunity-eval")
 def opportunity_eval(
-    cases: Path = typer.Option(Path("evals/opportunity/cases.yaml"), "--cases"),
-    cassette: Path = typer.Option(Path("evals/opportunity/cassette.json"), "--cassette"),
+    # Defaults: the decision cases and their current recording, so the bare command replays.
+    # The v1 recordings of evals/opportunity/ replay only with the v1 code (see their README).
+    cases: Path = typer.Option(Path("evals/decisions/cases.yaml"), "--cases"),
+    cassette: Path = typer.Option(Path("evals/decisions/cassette.json"), "--cassette"),
     example_dir: Path = typer.Option(DEFAULT_EXAMPLE, "--example-dir"),
     record: bool = typer.Option(False, "--record", help="Call the Anthropic API and write the cassette. Spends money."),
     extend: bool = typer.Option(False, "--extend", help="Replay recorded turns and record only the missing ones. Spends money."),

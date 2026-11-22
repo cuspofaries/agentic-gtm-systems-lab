@@ -1,8 +1,8 @@
 # agentic-gtm-systems-lab
 
-**Build, run, test and debug real-world Agentic GTM workflows.**
+**Learn, build and test Agentic GTM systems: from data foundations to autonomous decision-making.**
 
-An executable reference architecture for modern GTM engineering - from company context and data infrastructure to agent decisions, CRM actions, and evaluation.
+An executable learning lab and open-source reference architecture for GTM engineering. It runs one complete account-to-CRM workflow, offline by default, with optional real providers and a bounded Claude agent, and shows where facts come from, who decides what, what gets spent and how to measure it. It is not a Clay clone, a hosted platform, an unrestricted sales agent, a connector marketplace or a general-purpose workflow engine.
 
 [![tests](https://github.com/cuspofaries/agentic-gtm-systems-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/cuspofaries/agentic-gtm-systems-lab/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
@@ -14,24 +14,11 @@ An executable reference architecture for modern GTM engineering - from company c
 
 ---
 
-## What business problem does this solve?
+## Learn, build, test
 
-Most "AI GTM agent" repos stop at **discovery** (find companies) or **analysis** (why we lost). This one covers **the write path** - the slice of the workflow where an agent actually proposes changes to your CRM, and where things go wrong and cost money.
-
-Specifically: an end-to-end **Account Discovery → ICP Qualification → CRM Reconciliation → Enrichment (budget-enforced) → Human Approval → Idempotent Sync** pipeline, in a Python repo you can clone and run offline in five minutes.
-
-The four guardrails this repo exists to demonstrate:
-
-1. **CRM reconciliation before enrichment** - never pay to enrich an account you already have.
-2. **Deterministic budget enforcement** - a cents counter, not a prompt that asks the LLM nicely.
-3. **Mandatory human approval** between agent proposal and CRM write.
-4. **Idempotent, resumable sync** - retrying a run never creates duplicate records, and a plan whose CRM state changed after approval is not applied blindly.
-
-## Who is it for?
-
-**Developers learning GTM Engineering** - run a real workflow locally, break it on purpose, watch how failures propagate through a safe pipeline.
-
-**Experienced GTM Engineers** - extract reusable components (the budget enforcer, the reconciliation layer, the policy evaluator, the write-plan review artifact) and drop them into your existing Clay / n8n / Python stack. No platform adoption required.
+- **Learn.** Inspect a running system layer by layer and reproduce failure cases with no API key: [`docs/learning-path.md`](docs/learning-path.md) has one hands-on module per layer.
+- **Build.** Reuse the pieces in your own stack: provider and CRM contracts, budgets and policies, the bounded research loop, opportunity assessment, the approval gate, idempotent HubSpot writes ([`docs/integration-guide.md`](docs/integration-guide.md)).
+- **Test.** Compare a deterministic baseline with the agent on labeled cases, inspect the evidence, replay recorded model answers for free, count errors and estimate costs ([`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md)).
 
 ## What can I run in five minutes?
 
@@ -65,6 +52,62 @@ pytest -q                     # offline suite; the live HubSpot test is skipped 
 ```
 
 Choose this for scripts, CI, or to reuse the Python components without Claude Code.
+
+## The six layers, and where they are in the code
+
+Teaching boundaries inside one Python package, run in this order by one orchestrator ([`docs/concepts.md`](docs/concepts.md), [`docs/architecture.md`](docs/architecture.md)):
+
+| Layer | What it holds | Code |
+|---|---|---|
+| **Data Foundation** | Typed accounts and contacts, canonical domain identity, provenance and confidence, known unknowns, durable run state | `models.py`, `util.py`, `persistence/store.py`, `observability/events.py` |
+| **Data Layer** | Provider and CRM adapters, reconciliation against the CRM, source failures | `providers/`, `crm/`, `workflows/account_discovery.py` |
+| **GTM Brain** | ICP, personas, offers, pain points, buying roles, signal interpretation, policies, in one versioned YAML | `context/models.py`, `examples/account-discovery-to-crm/config/gtm-context.yaml` |
+| **Agentic Intelligence** (optional, paid) | Bounded research: Claude chooses searches and pages; code checks quotes, meaning and disconfirmation | `agents/research_tools.py`, `agents/research.py`, `agents/opportunity.py` |
+| **Activation & Governance** | Budgets, opportunity action policy, gated enrichment, persona mapping, policies, human approval, idempotent writes | `policies/`, `workflows/account_discovery.py`, `review.py` |
+| **Evaluation** | Run integrity checks, baseline vs agent on labeled cases, replayed recordings, failure scenarios | `evaluations/`, `evals/`, `tests/` |
+
+## What makes it different
+
+Open source and code-first: every step is a Python module you can read, test and reuse without adopting a platform. Decisions are auditable (every call, quote, cost and outcome is persisted), tests are reproducible (offline fixtures, recorded model answers replayed in CI), and vendor boundaries are interfaces, so the logic that decides what to spend and write does not live inside a vendor.
+
+Limits, stated up front: real providers and model calls are opt-in and paid; the evaluation data are fictional and labeled by one person; CRM writes always need a human approval; the workflow is Python code configured by YAML, and a declarative GTM-as-code pipeline is a possible future direction, not a feature.
+
+## Built today, not built, next
+
+| Implemented and tested | Explicitly not implemented | Suggested next |
+|---|---|---|
+| Offline demo: fixtures, SQLite mock CRM, rules, approval, idempotent sync, 13 failure scenarios | Live production outcome measurement (pipeline, revenue) | Run the decision comparison on real accounts labeled by someone other than the case author |
+| Real providers, opt-in: HubSpot (CRM), People Data Labs (companies, people), Exa (signals, research), FullEnrich (emails), ZeroBounce (email checks) | Apollo, Attio, Salesforce or Clay adapters (the [integration guide](docs/integration-guide.md) sketches some; none ships) | A Salesforce `CRMAdapter` on the HubSpot pattern |
+| Bounded research for missing facts (`--research exa`) and opportunity investigation (`--opportunity exa`), with checked quotes, an independent semantic check and audited disconfirmation | A vendor-neutral model runtime (the agent calls Claude) | Ablations (no disconfirmation, no GTM Brain) on new labeled cases |
+| Opportunity-gated contact enrichment (`--enrichment-strategy opportunity_gated`), persona mapping, read-only assessment of existing CRM accounts (`--opportunity-scope all`) | Contact-gap plans or contact updates for existing CRM accounts | Contact-gap plans from CRM data, read-only first |
+| Evaluations: 24-case set and 10-case held-out set (agent v1, [`evals/opportunity/v1/`](evals/opportunity/v1/)), 16-case decision set ([v2](evals/decisions/v2/), re-measured with v2.1 after a fix it motivated), 12-case fresh set (v2.1, [`evals/decisions/FRESH_REPORT.md`](evals/decisions/FRESH_REPORT.md)) | Declarative YAML workflows, `plan` / `diff` commands | A declarative pipeline over the same modules, if the modules prove stable |
+
+## Where to go next
+
+- [`docs/learning-path.md`](docs/learning-path.md): six hands-on modules, offline.
+- [`docs/concepts.md`](docs/concepts.md) and [`docs/architecture.md`](docs/architecture.md): the layers, the execution order, who decides what.
+- The example workflow: [`examples/account-discovery-to-crm/`](examples/account-discovery-to-crm/) and its walkthrough below.
+- [`docs/integration-guide.md`](docs/integration-guide.md): reuse a component or add a provider.
+- [`docs/configuration.md`](docs/configuration.md): every setting, flag and environment variable.
+
+## What business problem does this solve?
+
+Most "AI GTM agent" repos stop at **discovery** (find companies) or **analysis** (why we lost). This one covers **the write path** - the slice of the workflow where an agent actually proposes changes to your CRM, and where things go wrong and cost money.
+
+Specifically: an end-to-end **Account Discovery → ICP Qualification → CRM Reconciliation → Enrichment (budget-enforced) → Human Approval → Idempotent Sync** pipeline, in a Python repo you can clone and run offline in five minutes.
+
+The four guardrails this repo exists to demonstrate:
+
+1. **CRM reconciliation before enrichment** - never pay to enrich an account you already have.
+2. **Deterministic budget enforcement** - a cents counter, not a prompt that asks the LLM nicely.
+3. **Mandatory human approval** between agent proposal and CRM write.
+4. **Idempotent, resumable sync** - retrying a run never creates duplicate records, and a plan whose CRM state changed after approval is not applied blindly.
+
+## Who is it for?
+
+**Developers learning GTM Engineering** - run a real workflow locally, break it on purpose, watch how failures propagate through a safe pipeline.
+
+**Experienced GTM Engineers** - extract reusable components (the budget enforcer, the reconciliation layer, the policy evaluator, the write-plan review artifact) and drop them into your existing Clay / n8n / Python stack. No platform adoption required.
 
 ## What happens during the example workflow?
 
@@ -258,9 +301,9 @@ The labels are one person's, the pages are fictional, and code checks were chang
 
 ## What are the limitations?
 
-- **Offline by default.** The demo uses fixtures and a mock CRM; real providers (HubSpot, People Data Labs) are opt-in flags.
-- **The agentic path has not been run against the live API in CI.** It is unit-tested with a fake client. There is no labeled benchmark yet, so the LLM-vs-baseline comparison shows agreement, not accuracy.
-- **Real providers: HubSpot (CRM), People Data Labs (companies, contacts), FullEnrich (emails), ZeroBounce (email checks).** Salesforce is not implemented. On PDL's free plan contacts come without emails; FullEnrich can fill them (see `docs/email.md`).
+- **Offline by default.** The demo uses fixtures and a mock CRM; real providers are opt-in flags.
+- **No live API call in CI.** The agentic paths are tested with scripted clients and with Claude answers recorded once and replayed. The labeled benchmarks are small, fictional and single-labeled (see [`docs/agentic-vs-deterministic.md`](docs/agentic-vs-deterministic.md)); they show behavior on known failure modes, not production accuracy.
+- **Real providers: HubSpot (CRM), People Data Labs (companies, contacts), Exa (signals, research), FullEnrich (emails), ZeroBounce (email checks).** Salesforce is not implemented. On PDL's free plan contacts come without emails; FullEnrich can fill them (see `docs/email.md`).
 - **Idempotency is per run, not universal.** Retrying or re-syncing a run never duplicates. Two different runs (or another tool) writing the same new company are separated only by a domain search, and HubSpot's search lags writes by a few seconds: run one sync at a time per portal (see `docs/hubspot.md`).
 - **No multi-tenant state.** One SQLite file per workflow run.
 - **No scheduler / queue.** `gtm-lab` is CLI-driven; you orchestrate when it runs.
@@ -328,7 +371,7 @@ agentic-gtm-systems-lab/
 | Account discovery: fixture | Implemented and tested |
 | Account discovery: People Data Labs | Implemented; unit-tested against a fake in CI; run end to end on real companies |
 | ICP qualification (rules) | Implemented and tested |
-| ICP qualification (LLM, ambiguous cases only) | Implemented, unit-tested with a fake client, not run live in CI |
+| ICP qualification (LLM, ambiguous cases only, `--agentic`) | Implemented, unit-tested with a fake client, never run against the live API |
 | CRM reconciliation | Implemented and tested |
 | Enrichment budget | Implemented and tested |
 | Human approval gate | Implemented and tested |
@@ -344,7 +387,7 @@ agentic-gtm-systems-lab/
 | End-to-end test on real data, with expected results | Implemented (`docs/real-case-test.md`); harness tested against fakes in CI; two private cases recorded and replayed |
 | Explicit CRM setup, portal identity checked before sync | Implemented; unit-tested; checked live on a HubSpot test portal |
 | Salesforce adapter | Planned - not implemented |
-| Labeled benchmark for the LLM step | Planned - not implemented |
+| Labeled benchmarks for the agent (opportunity and decision sets, recorded and replayed in CI) | Implemented; fictional, single-labeled, small |
 | Dated buying signals (Exa) | Implemented; unit-tested against a fake in CI; run on two real companies |
 | Agent choosing its own research steps in a bounded loop (`--research exa`) | Implemented; claims checked and reconciled by code, rules decide; tested with a scripted Claude client and a fake Exa in CI; an earlier version run against the real API on two real companies |
 | Opportunity assessment and brief (`--opportunity exa`, `gtm-lab opportunity`) | Implemented; evaluated against a no-AI baseline on 24 labeled fictional cases plus 10 held-out ones, with recorded Claude answers (replayed in CI); not yet run on real accounts |

@@ -79,6 +79,8 @@ Drop into any end-of-run gate. Four checks, zero external dependencies.
 
 ## Implementing a real provider
 
+Adapters that ship: fixtures, People Data Labs (`providers/pdl.py`), Exa (`providers/signals.py`), FullEnrich and ZeroBounce (`providers/email.py`), the mock CRM and HubSpot (`crm/`). The Clay and Apollo classes below are **sketches** of what an adapter looks like; no Clay or Apollo adapter ships, and none has been tested.
+
 ### Discovery
 
 ```python
@@ -125,7 +127,7 @@ class ApolloEnrichment(EnrichmentProvider):
         ...
 ```
 
-Drop any combination into `AccountDiscoveryWorkflow` - the orchestrator doesn't care.
+Inject any combination into `AccountDiscoveryWorkflow` in Python (the CLI only wires the adapters that ship): the orchestrator only sees the interfaces.
 
 ## Minimal recipe for a new workflow
 

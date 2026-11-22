@@ -1,6 +1,6 @@
 # agentic-gtm-systems-lab
 
-A reference implementation of one GTM workflow: account discovery → ICP qualification → CRM reconciliation → budget-capped enrichment → human approval → sync. By default the data is synthetic and the CRM is a local SQLite mock; real providers (People Data Labs, FullEnrich, ZeroBounce, HubSpot) are opt-in flags. It is a lab, not a production pipeline.
+A learning lab and reference implementation of one GTM workflow: account discovery → ICP qualification → CRM reconciliation → optional opportunity assessment → budget-capped enrichment → human approval → sync. By default the data is synthetic and the CRM is a local SQLite mock; real providers (People Data Labs, Exa, FullEnrich, ZeroBounce, HubSpot) and the Claude agent are opt-in flags. Layers and their code: `docs/concepts.md`; exercises: `docs/learning-path.md`.
 
 ## Where things are
 
@@ -23,7 +23,7 @@ Installed by `pip install -e ".[dev]"` into `.venv` (use `.venv/bin/gtm-lab` if 
 | `gtm-lab demo ... --research exa` | Claude researches undecided accounts with web search, under step and spend caps; paid LLM and Exa calls. Only on explicit request, after stating the caps. |
 | `gtm-lab demo ... --opportunity exa` | Before enrichment, assesses whether new qualified accounts show the offer's problem (Claude plus Exa, capped). Paid; only on explicit request. |
 | `gtm-lab opportunity <run-id> [--json]` | The run's Account Opportunity Brief. Reads persisted state only. |
-| `gtm-lab opportunity-eval --cases FILE --cassette FILE` | Baseline vs agent on labeled cases. Free when replaying a cassette recorded by the same agent version (`evals/opportunity/v1/` replays at commit `48ca5e2`). `--record` and `--extend` are paid. |
+| `gtm-lab opportunity-eval [--cases FILE --cassette FILE]` | Baseline vs agent on labeled cases; defaults to the decision cases and their current recording (free replay). `evals/opportunity/v1/` replays only at commit `48ca5e2`. `--record` and `--extend` are paid. |
 | `gtm-lab demo ... --opportunity exa --enrichment-strategy opportunity_gated` | Contact enrichment only for evidence-backed opportunities, mapped personas only. Paid; only on explicit request. `--opportunity-scope all` adds existing CRM accounts, read-only. |
 | `gtm-lab decision-eval [--json]` | Cost and outcome of enriching everyone vs gating, on labeled cases, replayed (free). `--record`/`--extend` are paid. |
 | `gtm-lab runs [--json]` | List runs, newest first. |
