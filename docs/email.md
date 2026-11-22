@@ -73,6 +73,14 @@ Both providers have free test inputs, used to check the connectors live at no co
 
 Both were run live this way: balances were the same before and after, statuses matched the table above, and a wrong ZeroBounce key was reported as a failure.
 
+## Measured on real contacts
+
+Three contacts from a real run (People Data Labs contacts at two US SaaS companies, no email), found and checked with both providers:
+
+- FullEnrich found an email for all three: one `DELIVERABLE`, two `HIGH_PROBABILITY`. ZeroBounce then returned `valid` for all three, so the two `HIGH_PROBABILITY` became `valid`.
+- It cost exactly 3 FullEnrich credits and 3 ZeroBounce credits (balances read before and after).
+- **One email was on another domain than the company's website** (a short alias domain of the company). Matching contacts to companies by email domain would have missed it. With HubSpot's "Create and associate companies with contacts" setting on, it would also have created a second company for that domain (see `hubspot.md`).
+
 `tests/unit/test_email_pipeline.py` covers the same behavior with fake transports and runs in CI.
 
 ## Limits
