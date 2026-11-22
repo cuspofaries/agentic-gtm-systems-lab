@@ -79,6 +79,19 @@ class CRMSettings(BaseModel):
     hubspot_contact_legal_basis: str | None = None
 
 
+class DiscoverySettings(BaseModel):
+    """Provider-specific search filters used by real discovery providers.
+
+    The ICP band (employees, geographies) is always applied; these add the provider's own
+    vocabulary for "what kind of company", which the ICP keywords cannot express.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    pdl_industries: list[str] = Field(default_factory=list)  # e.g. ["computer software"]
+    pdl_tags: list[str] = Field(default_factory=list)  # e.g. ["software as a service"]
+
+
 class GTMContext(BaseModel):
     """The full GTM context, versioned and loadable in one call."""
 
@@ -92,3 +105,4 @@ class GTMContext(BaseModel):
     exclusions: list[ExclusionRule]
     policy: Policy
     crm: CRMSettings = Field(default_factory=CRMSettings)
+    discovery: DiscoverySettings = Field(default_factory=DiscoverySettings)

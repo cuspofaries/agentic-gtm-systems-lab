@@ -91,6 +91,8 @@ State the evidence for each finding. Never modify state to fix it.
 
 `gtm-lab demo --crm hubspot` reconciles against a real HubSpot portal and needs `HUBSPOT_SERVICE_KEY`. Run it only if the user asks for it. Planning only reads HubSpot; the sync of an approved HubSpot plan writes to it. See `docs/hubspot.md`.
 
+`--discovery pdl` and `--enrichment pdl` call People Data Labs and spend the user's credits (1 per company or person returned). Use them only on explicit request, and say how many credits the run can spend (`--limit` companies, `--profiles-per-account` per account) before running. See `docs/pdl.md`.
+
 ## LLM mode
 
 `gtm-lab demo --agentic` makes paid Anthropic API calls from Python, separate from this conversation. Run it only if the user asks for it explicitly. Before running it, state that it needs `ANTHROPIC_API_KEY` (or an `ant auth login` profile), that it is capped by default at 5 calls and 50 cents (`--max-llm-calls`, `--max-llm-cents`), and that it only sees accounts the rules could not decide. Then get a yes.

@@ -27,7 +27,12 @@ from .crm.mock import MockCRM
 from .evaluations import evaluate_run
 from .observability.events import EventRecorder
 from .persistence.store import RunStore
-from .providers import FixtureDiscoveryProvider, FixtureEnrichmentProvider
+from .providers import (
+    FixtureDiscoveryProvider,
+    FixtureEnrichmentProvider,
+    PDLCompanyDiscoveryProvider,
+    PDLEnrichmentProvider,
+)
 from .review import render_review
 from .summary import CRM_LABELS, run_detail, run_summary
 from .workflows import AccountDiscoveryWorkflow
@@ -56,20 +61,77 @@ def _make_crm(crm: str, ctx, state_dir: Path):
     _fail(f"Unknown CRM '{crm}'. Use 'mock' or 'hubspot'.")
 
 
+def _make_enrichment(enrichment: str, ctx, example_dir: Path, profiles_per_account: int,
+                     title_levels: list[str] | None = None):
+    if enrichment == "fixture":
+        return FixtureEnrichmentProvider(example_dir / "fixtures" / "enrichment.yaml")
+    if enrichment == "pdl":
+        key = os.environ.get("PDL_API_KEY")
+        if not key:
+            _fail("People Data Labs selected but PDL_API_KEY is not set.")
+        return PDLEnrichmentProvider(key, ctx.personas, profiles_per_account=profiles_per_account,
+                                     title_levels=title_levels)
+    _fail(f"Unknown enrichment provider '{enrichment}'. Use 'fixture' or 'pdl'.")
+
+
+def _make_discovery(discovery: str, ctx, example_dir: Path):
+    if discovery == "fixture":
+        return FixtureDiscoveryProvider(example_dir / "fixtures" / "discovery.yaml")
+    if discovery == "pdl":
+        key = os.environ.get("PDL_API_KEY")
+        if not key:
+            _fail("People Data Labs selected but PDL_API_KEY is not set.")
+        return PDLCompanyDiscoveryProvider(key, ctx)
+    _fail(f"Unknown discovery provider '{discovery}'. Use 'fixture' or 'pdl'.")
+
+
 def _build_workflow(
-    example_dir: Path, state_dir: Path, fallback_qualifier=None, crm: str = "mock"
+    example_dir: Path,
+    state_dir: Path,
+    fallback_qualifier=None,
+    crm: str = "mock",
+    discovery: str = "fixture",
+    enrichment: str = "fixture",
+    profiles_per_account: int = 2,
+    title_levels: list[str] | None = None,
 ) -> AccountDiscoveryWorkflow:
     state_dir.mkdir(parents=True, exist_ok=True)
     ctx = load_context(example_dir / "config" / "gtm-context.yaml")
     return AccountDiscoveryWorkflow(
         context=ctx,
-        discovery=FixtureDiscoveryProvider(example_dir / "fixtures" / "discovery.yaml"),
-        enrichment=FixtureEnrichmentProvider(example_dir / "fixtures" / "enrichment.yaml"),
+        discovery=_make_discovery(discovery, ctx, example_dir),
+        enrichment=_make_enrichment(enrichment, ctx, example_dir, profiles_per_account, title_levels),
         crm=_make_crm(crm, ctx, state_dir),
         store=RunStore(state_dir / "runs.sqlite"),
         recorder=EventRecorder(state_dir / "events.jsonl"),
         qualifier=DeterministicQualifier(),
         fallback_qualifier=fallback_qualifier,
+    )
+
+
+def _state_workflow(state_dir: Path) -> AccountDiscoveryWorkflow:
+    """Approve and reject only change persisted plan state: no provider, CRM or context."""
+    return AccountDiscoveryWorkflow(
+        context=None,
+        discovery=None,
+        enrichment=None,
+        crm=None,
+        store=RunStore(state_dir / "runs.sqlite"),
+        recorder=EventRecorder(state_dir / "events.jsonl"),
+    )
+
+
+def _sync_workflow(example_dir: Path, state_dir: Path, crm: str) -> AccountDiscoveryWorkflow:
+    """Sync writes a stored plan: it needs the context (CRM settings) and the CRM, not the
+    discovery or enrichment providers."""
+    ctx = load_context(example_dir / "config" / "gtm-context.yaml")
+    return AccountDiscoveryWorkflow(
+        context=ctx,
+        discovery=None,
+        enrichment=None,
+        crm=_make_crm(crm, ctx, state_dir),
+        store=RunStore(state_dir / "runs.sqlite"),
+        recorder=EventRecorder(state_dir / "events.jsonl"),
     )
 
 
@@ -106,6 +168,10 @@ def demo(
     max_llm_cents: int = typer.Option(50, "--max-llm-cents", help="Hard cap on LLM spend in cents."),
     as_json: bool = typer.Option(False, "--json", help="Print a structured run summary as JSON."),
     crm: str = typer.Option("mock", "--crm", help="CRM to reconcile against: mock (default) or hubspot."),
+    discovery: str = typer.Option("fixture", "--discovery", help="Company source: fixture (default) or pdl."),
+    enrichment: str = typer.Option("fixture", "--enrichment", help="Contact provider: fixture (default) or pdl."),
+    profiles_per_account: int = typer.Option(2, "--profiles-per-account", help="pdl only: max contacts fetched per account."),
+    title_levels: str = typer.Option("", "--title-levels", help="pdl only: comma-separated job_title_levels to keep, e.g. cxo,vp,director."),
 ):
     """Run the demo end to end. Stops at the human approval gate - no CRM writes."""
     out = err_console if as_json else console
@@ -129,7 +195,13 @@ def demo(
             out.print(f"[yellow]Agentic mode unavailable ({type(exc).__name__}: {exc}). "
                       "Running the deterministic offline mode instead; no LLM was called.[/yellow]")
 
-    wf = _build_workflow(example_dir, state_dir, fallback_qualifier=fallback, crm=crm)
+    wf = _build_workflow(example_dir, state_dir, fallback_qualifier=fallback, crm=crm,
+                         discovery=discovery, enrichment=enrichment, profiles_per_account=profiles_per_account,
+                         title_levels=[x.strip() for x in title_levels.split(",") if x.strip()] or None)
+    if enrichment != "fixture":
+        out.print(f"[cyan]Enrichment:[/cyan] {wf.enrichment.name}, up to "
+                  f"{wf.enrichment.max_cost_cents_per_call}¢ per account, "
+                  f"budget {wf.context.policy.enrichment_budget_cents}¢.")
     if crm == "mock":
         _seed_crm_if_empty(wf.crm, example_dir / "fixtures" / "crm-seed.yaml")
     else:
@@ -141,8 +213,11 @@ def demo(
     review_path = state_dir / f"review_{plan.run_id}.md"
     review_path.write_text(render_review(plan, wf.store))
 
+    credits = getattr(wf.enrichment, "credits_remaining", None)
     if as_json:
         summary = run_summary(plan.run_id, state_dir)
+        if credits is not None:
+            summary["provider_credits_remaining"] = credits
         if provider is not None:
             summary["llm"] = {"calls": provider.calls, "estimated_spend_cents": provider.spent_cents,
                               "errors": provider.errors}
@@ -150,6 +225,8 @@ def demo(
         return
 
     console.print(f"[green]Plan proposed:[/green] run_id=[bold]{plan.run_id}[/bold]")
+    if credits is not None:
+        console.print(f"{wf.enrichment.name} credits remaining: {credits}")
     console.print(f"Review artifact → {review_path}")
     console.print("Next: `gtm-lab approve " + plan.run_id + "` or `gtm-lab reject " + plan.run_id + "`")
     t = Table(title="Entries")
@@ -268,7 +345,7 @@ def approve(
     before = _require_plan(run_id, state_dir).status.value
     if before != "proposed":
         _fail(f"Run {run_id} is '{before}'; only a 'proposed' plan can be approved.")
-    plan = _build_workflow(example_dir, state_dir).approve(run_id)
+    plan = _state_workflow(state_dir).approve(run_id)
     console.print(f"[green]Approved[/green] {run_id}: proposed → approved. "
                   f"{len(plan.approvable_entries)} entries will be written by `gtm-lab sync {run_id}`. "
                   "Nothing has been written to the CRM yet.")
@@ -285,7 +362,7 @@ def reject(
     before = _require_plan(run_id, state_dir).status.value
     if before != "proposed":
         _fail(f"Run {run_id} is '{before}'; only a 'proposed' plan can be rejected.")
-    _build_workflow(example_dir, state_dir).reject(run_id, reason=reason)
+    _state_workflow(state_dir).reject(run_id, reason=reason)
     console.print(f"[yellow]Rejected[/yellow] {run_id}: proposed → rejected.")
 
 
@@ -305,7 +382,7 @@ def sync(
               f"Review it, then `gtm-lab approve {run_id}`.")
     if before == "rejected":
         _fail(f"Run {run_id} was rejected; it cannot be synced.")
-    wf = _build_workflow(example_dir, state_dir, crm=target)
+    wf = _sync_workflow(example_dir, state_dir, target)
     results = wf.sync(run_id)
     after = wf.store.load_plan(run_id).status.value
     counts = {k: sum(1 for r in results if r.outcome == k)

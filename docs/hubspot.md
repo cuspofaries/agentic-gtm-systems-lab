@@ -61,6 +61,7 @@ Measured on a test portal, not assumed:
 - **Automatic company association by email domain.** With "Create and associate companies with contacts" on, HubSpot creates a company for each contact's email domain and makes it the contact's **primary** company. This overrides the association the connector sets, even when the connector marks it as primary. With real data the email domain matches the company, so it lines up. With the synthetic fixture (emails on `example.com`), it creates a company "example.com" and attaches every contact to it. Turn the setting off on a test portal. With it off, HubSpot makes the company the connector associates the contact's primary company on its own (checked on the test portal).
 - **Reserved email domains** `.invalid` and `.example` are rejected as invalid emails. The fixture uses `example.com` (reserved by RFC 2606).
 - **A missing ref lookup** returns 404 with an HTML body; the connector treats it as "not found".
+- **Domains are stored as typed** (`www.acquia.com`, `https://hyland.com/`). Matching the bare domain missed them in a real run, which would have created duplicates. The connector now searches every common spelling (with or without scheme, `www.` and trailing slash) with the `IN` operator; HubSpot compares case-insensitively. A domain stored with a path (`acquia.com/en`) is still not matched.
 
 ## Testing
 

@@ -26,6 +26,9 @@ class ProviderResult:
     contacts: list[ContactProposal] = field(default_factory=list)
     source_failures: list[str] = field(default_factory=list)
     search_coverage: dict[str, int] = field(default_factory=dict)  # provider → rows returned
+    # What the call actually cost, when the provider knows it (e.g. credits reported in a
+    # response header). None = the budget is charged the provider's announced maximum.
+    cost_cents: int | None = None
 
 
 class DiscoveryProvider(ABC):
@@ -40,12 +43,17 @@ class DiscoveryProvider(ABC):
 class EnrichmentProvider(ABC):
     """Returns ContactProposals for a given account and persona.
 
-    The provider reports its estimated cost in integer cents - the budget enforcer uses this
-    to decide whether to call. The provider itself does NOT enforce the budget.
+    The provider announces the most one call can cost, in integer cents. The budget enforcer
+    checks that maximum before calling and charges the actual cost afterwards (or the
+    maximum if the provider cannot tell). The provider itself does NOT enforce the budget.
     """
 
     name: str = "enrichment"
-    cost_cents_per_call: int = 10
+    cost_cents_per_call: int = 10  # worst case for one call
+
+    @property
+    def max_cost_cents_per_call(self) -> int:
+        return self.cost_cents_per_call
 
     @abstractmethod
     def enrich(self, account: Account, personas: Iterable[str]) -> ProviderResult: ...

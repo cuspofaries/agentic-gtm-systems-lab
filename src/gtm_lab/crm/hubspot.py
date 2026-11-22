@@ -4,6 +4,9 @@ Behavior measured on a HubSpot test portal (API version 2026-09), not assumed:
 
 - HubSpot accepts two companies with the same domain. Domain uniqueness is enforced here,
   by searching before every create.
+- HubSpot stores the domain exactly as typed ("www.acquia.com", "https://hyland.com/").
+  The domain search therefore asks for every common spelling (scheme, www, trailing slash)
+  with the IN operator; the comparison itself is case-insensitive.
 - The search index lags by a few seconds (about 6.5 s measured). A company created by
   someone else in that window can be missed by the domain check. The external-ref lookup
   is a direct read and does not lag.
@@ -143,7 +146,9 @@ class HubSpotCRM(CRMAdapter):
             "POST",
             f"{self._objects('companies')}/search",
             {
-                "filterGroups": [{"filters": [{"propertyName": "domain", "operator": "EQ", "value": d}]}],
+                "filterGroups": [{"filters": [
+                    {"propertyName": "domain", "operator": "IN", "values": domain_spellings(d)}
+                ]}],
                 "properties": ["domain", "name", "hs_lastmodifieddate", REF_PROPERTY],
                 "limit": 10,
             },
@@ -298,6 +303,16 @@ class HubSpotCRM(CRMAdapter):
             title=p.get("jobtitle"),
             updated_at=_dt(p.get("lastmodifieddate") or r.get("updatedAt")),
         )
+
+
+def domain_spellings(domain: str) -> list[str]:
+    """The ways people type a domain into a CRM field, all pointing at the same company."""
+    return [
+        f"{scheme}{www}{domain}{slash}"
+        for scheme in ("", "http://", "https://")
+        for www in ("", "www.")
+        for slash in ("", "/")
+    ]
 
 
 class _ClientError(CRMError):

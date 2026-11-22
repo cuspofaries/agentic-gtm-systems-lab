@@ -195,7 +195,7 @@ A HubSpot adapter ships: `gtm-lab demo --crm hubspot`, then approve and sync as 
 
 - **Offline demo only out of the box.** No live provider adapter is bundled. The brief says this is intentional - the point is the pipeline shape, not vendor lock-in.
 - **The agentic path has not been run against the live API in CI.** It is unit-tested with a fake client. There is no labeled benchmark yet, so the LLM-vs-baseline comparison shows agreement, not accuracy.
-- **One real CRM: HubSpot, companies and contacts only.** Salesforce is not implemented. Discovery and enrichment are still synthetic fixtures, so even with HubSpot only the CRM side is real. HubSpot's search lag leaves a few-second race against other writers (see `docs/hubspot.md`).
+- **Real providers: HubSpot (CRM) and People Data Labs (companies, contacts).** Salesforce is not implemented. On PDL's free plan, contacts come without emails. HubSpot's search lag leaves a few-second race against other writers (see `docs/hubspot.md`).
 - **No multi-tenant state.** One SQLite file per workflow run.
 - **No scheduler / queue.** `gtm-lab` is CLI-driven; you orchestrate when it runs.
 
@@ -236,6 +236,7 @@ agentic-gtm-systems-lab/
 │   ├── configuration.md          every setting, its default and what it does
 │   ├── claude-code.md            the /gtm-lab skill: commands, safety, real transcripts
 │   ├── hubspot.md                HubSpot connector: setup, behavior, limits
+│   ├── pdl.md                    People Data Labs discovery and contacts
 │   ├── failure-scenarios.md
 │   ├── integration-guide.md
 │   └── adr/                      architectural decision records
@@ -262,6 +263,7 @@ agentic-gtm-systems-lab/
 | Claude Code skill `/gtm-lab` | Implemented; files checked in CI; invoked for real in Claude Code print mode (not the interactive UI) |
 | Structured CLI output (`--json`, `inspect`) | Implemented and tested |
 | HubSpot adapter (companies, contacts) | Implemented; unit-tested against a fake in CI; run end to end against a HubSpot test portal (opt-in live test) |
+| People Data Labs discovery and contacts | Implemented; unit-tested against a fake in CI; run end to end with HubSpot on real companies (free plan: no emails) |
 | Salesforce adapter | Planned - not implemented |
 | Labeled benchmark for the LLM step | Planned - not implemented |
 

@@ -200,3 +200,21 @@ def test_runs_default_output_unchanged(tmp_path):
     run_id = _demo(tmp_path)["run_id"]
     res = runner.invoke(app, ["runs", "--state-dir", str(tmp_path)])
     assert res.stdout.strip().splitlines() == [run_id]
+
+
+@pytest.mark.integration
+def test_approve_and_sync_do_not_need_provider_fixtures(tmp_path):
+    """A setup with real providers has no fixtures dir; approval must still work."""
+    run_id = _demo(tmp_path)["run_id"]
+    bare = tmp_path / "bare-example"
+    (bare / "config").mkdir(parents=True)
+    sd = ["--state-dir", str(tmp_path), "--example-dir", str(bare)]
+    assert runner.invoke(app, ["approve", run_id, *sd]).exit_code == 0
+    import shutil
+
+    from tests.conftest import EXAMPLE_DIR
+
+    shutil.copy(EXAMPLE_DIR / "config" / "gtm-context.yaml", bare / "config" / "gtm-context.yaml")
+    res = runner.invoke(app, ["sync", run_id, "--json", *sd])
+    assert res.exit_code == 0, res.output
+    assert json.loads(res.stdout)["status_after"] == "synced"

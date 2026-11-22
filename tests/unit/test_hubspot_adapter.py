@@ -59,8 +59,11 @@ class FakeHubSpot:
         obj = parts[3]
         store = self.companies if obj == "companies" else self.contacts
         if method == "POST" and len(parts) == 5 and parts[4] == "search":
-            value = data["filterGroups"][0]["filters"][0]["value"]
-            hits = [] if self.search_lag else [r for r in store.values() if r["properties"].get("domain") == value]
+            f = data["filterGroups"][0]["filters"][0]
+            wanted = {v.lower() for v in (f.get("values") or [f.get("value")])}
+            hits = [] if self.search_lag else [
+                r for r in store.values() if (r["properties"].get("domain") or "").lower() in wanted
+            ]
             return 200, {"total": len(hits), "results": hits}, {}
         if method == "POST" and len(parts) == 4:
             props = data["properties"]
@@ -104,7 +107,8 @@ def test_planning_reads_do_not_touch_the_schema():
     _crm(fake).find_accounts_by_domain("HTTPS://www.Brightpath.saas.example/")
     assert [c.method for c in fake.calls] == ["POST"]
     assert fake.calls[0].path.endswith("/companies/search")
-    assert fake.calls[0].body["filterGroups"][0]["filters"][0]["value"] == "brightpath.saas.example"
+    f = fake.calls[0].body["filterGroups"][0]["filters"][0]
+    assert f["operator"] == "IN" and "brightpath.saas.example" in f["values"]
     assert fake.properties == set()
 
 
@@ -265,3 +269,15 @@ def test_revalidation_error_is_recorded_not_raised(make_workflow):
     assert first.outcome == "failed" and "revalidate" in first.error
     assert sum(1 for r in results if r.operation == "create_account" and r.outcome == "ok") == 6
     assert wf.store.load_plan(plan.run_id).status.value == "partial"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("typed", ["www.acquia.com", "https://acquia.com/", "HTTP://WWW.Acquia.com", "acquia.com"])
+def test_domain_typed_differently_in_the_crm_is_still_found(typed):
+    """Measured on a real portal: HubSpot keeps the domain as typed by the user."""
+    fake = FakeHubSpot()
+    fake.companies["7"] = {"id": "7", "properties": {"domain": typed, "name": "Acquia (entered by sales)"}}
+    crm = _crm(fake)
+    assert [a.crm_account_id for a in crm.find_accounts_by_domain("acquia.com")] == ["7"]
+    with pytest.raises(CRMError):
+        crm.create_account(domain="acquia.com", name="Acquia", source="run", external_ref="r1")

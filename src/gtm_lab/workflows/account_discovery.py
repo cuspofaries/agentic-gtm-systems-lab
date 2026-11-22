@@ -261,11 +261,14 @@ class AccountDiscoveryWorkflow:
 
             # Fresh account → enrich only if budget allows
             persona_names = [p.name for p in self.context.personas]
-            cost = self.enrichment.cost_cents_per_call
+            max_cost = self.enrichment.max_cost_cents_per_call
             new_contacts: list[ContactProposal] = []
             enrichment_status = "budget_exceeded"
-            if budget.can_spend(cost):
+            if budget.can_spend(max_cost):
                 enrich_result = self.enrichment.enrich(acc, persona_names)
+                reported = enrich_result.cost_cents
+                # A provider cannot charge more than the maximum it announced.
+                cost = max_cost if reported is None else min(reported, max_cost)
                 budget.charge(cost)
                 costs.append(
                     EnrichmentCost(
