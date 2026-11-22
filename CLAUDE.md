@@ -20,6 +20,7 @@ Installed by `pip install -e ".[dev]"` into `.venv` (use `.venv/bin/gtm-lab` if 
 | `gtm-lab demo --discovery pdl --enrichment pdl` | Real companies and contacts from People Data Labs; spends credits. Only on explicit request. |
 | `gtm-lab demo ... --email-finder fullenrich --email-verifier zerobounce` | Finds and checks contact emails; spends credits. Only on explicit request. |
 | `gtm-lab demo ... --signals exa` | Searches the web for dated buying signals per account; spends Exa credits. Only on explicit request. |
+| `gtm-lab demo ... --research exa` | Claude researches undecided accounts with web search, under step and spend caps; paid LLM and Exa calls. Only on explicit request, after stating the caps. |
 | `gtm-lab runs [--json]` | List runs, newest first. |
 | `gtm-lab inspect <run-id>` | All persisted state of a run as JSON: `summary`, accounts, decisions, matches, costs, plan, write results, audit events. |
 | `gtm-lab eval <run-id> [--json]` | Four integrity checks. Exit code 1 on failure. |
@@ -34,6 +35,7 @@ Read `--json` output or `inspect` instead of parsing the terminal tables.
 
 - Offline (`--offline`, the default): deterministic rules only, no network, no key.
 - Agentic (`--agentic`): accounts the rules mark `insufficient_evidence` are sent to the Anthropic API from Python, with call and spend caps. This is a paid API call made by the application. It is separate from Claude Code's own reasoning. Never run it unless the user explicitly asks for it and confirms the cost.
+- Research (`--research exa`): same accounts, but Claude searches and reads web pages in a bounded loop before deciding; evidence counts only if its quote is in a page it read. Paid (LLM and Exa). Same rule: explicit request and confirmed cost only.
 
 ## Safety rules
 

@@ -226,6 +226,9 @@ def demo(
     email_finder_cents: int = typer.Option(10, "--email-finder-cents", help="Budget value of one finder credit, in cents. Set it to your plan's price."),
     email_verifier_cents: int = typer.Option(2, "--email-verifier-cents", help="Budget value of one verifier credit, in cents. Set it to your plan's price."),
     signals: str = typer.Option("none", "--signals", help="Dated buying signals from the web: none (default) or exa."),
+    research: str = typer.Option("none", "--research", help="Research undecided accounts in a bounded tool loop: none (default) or exa. Uses Claude and Exa; spends money."),
+    research_steps: int = typer.Option(6, "--research-steps", help="Research only: max tool calls per account."),
+    research_exa_millidollars: int = typer.Option(50, "--research-exa-millidollars", help="Research only: Exa spend cap per run, in thousandths of a dollar."),
 ):
     """Run the demo end to end. Stops at the human approval gate - no CRM writes."""
     out = err_console if as_json else console
@@ -248,6 +251,27 @@ def demo(
         except Exception as exc:  # missing package or credentials
             out.print(f"[yellow]Agentic mode unavailable ({type(exc).__name__}: {exc}). "
                       "Running the deterministic offline mode instead; no LLM was called.[/yellow]")
+
+    research_agent = None
+    if research != "none":
+        if research != "exa":
+            _fail(f"Unknown research mode '{research}'. Use 'none' or 'exa'.")
+        if not offline:
+            _fail("--research and --agentic both decide undecided accounts; pick one.")
+        if not os.environ.get("EXA_API_KEY"):
+            _fail("Research selected but EXA_API_KEY is not set.")
+        if not _anthropic_credentials_available():
+            _fail("Research needs Anthropic credentials (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN "
+                  "or an `ant auth login` profile).")
+        from .agents.research import ResearchQualifier
+
+        research_agent = ResearchQualifier(os.environ["EXA_API_KEY"], max_steps=research_steps,
+                                           max_llm_cents=max_llm_cents,
+                                           max_exa_millidollars=research_exa_millidollars)
+        fallback = research_agent
+        out.print(f"[cyan]Research:[/cyan] {research_agent.model} researches accounts the rules return as "
+                  f"insufficient_evidence (max {research_steps} steps each; caps {max_llm_cents}¢ LLM, "
+                  f"${research_exa_millidollars / 1000:.3f} Exa).")
 
     wf = _build_workflow(example_dir, state_dir, fallback_qualifier=fallback, crm=crm,
                          discovery=discovery, enrichment=enrichment, profiles_per_account=profiles_per_account,
@@ -282,6 +306,11 @@ def demo(
         if provider is not None:
             summary["llm"] = {"calls": provider.calls, "estimated_spend_cents": provider.spent_cents,
                               "errors": provider.errors}
+        if research_agent is not None:
+            summary["research"] = {"llm_calls": research_agent.llm_calls,
+                                   "llm_spent_cents": research_agent.llm_spent_cents,
+                                   "exa_spent_millidollars": research_agent.exa_spent_millidollars,
+                                   "errors": research_agent.errors}
         _emit_json(summary)
         return
 
@@ -306,6 +335,10 @@ def demo(
         )
     console.print(t)
 
+    if research_agent is not None:
+        console.print(f"Research: {research_agent.llm_calls} LLM call(s), {research_agent.llm_spent_cents}¢; "
+                      f"Exa ${research_agent.exa_spent_millidollars / 1000:.3f}"
+                      + (f" · errors: {research_agent.errors}" if research_agent.errors else ""))
     if provider is not None:
         cmp = Table(title="LLM vs deterministic baseline (insufficient_evidence cases only)")
         cmp.add_column("Account")

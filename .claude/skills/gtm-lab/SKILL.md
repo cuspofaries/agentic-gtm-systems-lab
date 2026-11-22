@@ -39,7 +39,7 @@ In under 15 lines: what the lab demonstrates (the write path of a GTM workflow: 
 
 ### demo
 
-1. Run `gtm-lab demo --offline --json`. Never `--agentic` here.
+1. Run `gtm-lab demo --offline --json`. Never `--agentic` or `--research` here.
 2. From the JSON, explain in business terms: accounts discovered and provider failures (`discovery`); qualified, rejected and undecided (`qualification`, `not_in_plan`); already in the CRM and in-batch duplicates (`entries[].skip_reason`); enrichment calls and the budget (`enrichment`, `entries[].enrichment_status`); proposed CRM changes (`entries` where `approvable` is true); missing evidence (`insufficient_evidence` accounts).
 3. Give the run id and the review artifact path (`paths.review_artifact`).
 4. Stop. Say that nothing was written and that approval is a separate step. Do not approve or sync.
@@ -96,3 +96,5 @@ State the evidence for each finding. Never modify state to fix it.
 ## LLM mode
 
 `gtm-lab demo --agentic` makes paid Anthropic API calls from Python, separate from this conversation. Run it only if the user asks for it explicitly. Before running it, state that it needs `ANTHROPIC_API_KEY` (or an `ant auth login` profile), that it is capped by default at 5 calls and 50 cents (`--max-llm-calls`, `--max-llm-cents`), and that it only sees accounts the rules could not decide. Then get a yes.
+
+`gtm-lab demo --research exa` makes paid calls too: Claude through the Anthropic API and Exa searches, in a loop per undecided account. Same rule: only on explicit request. Before running it, state that it needs `ANTHROPIC_API_KEY` and `EXA_API_KEY`, and its caps: `--research-steps` (default 6 tool calls per account), `--max-llm-cents` (default 50) and `--research-exa-millidollars` (default 50, that is $0.05). Then get a yes. To explain a researched decision, read the `steps` of its `qualification.fallback` event in `inspect`.

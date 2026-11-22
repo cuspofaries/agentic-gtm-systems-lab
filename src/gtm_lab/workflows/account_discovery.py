@@ -214,7 +214,10 @@ class AccountDiscoveryWorkflow:
                         "fallback_decision": decision.decision,
                         "fallback_decided_by": decision.decided_by,
                         "agrees_with_baseline": decision.decision == baseline.decision,
-                    },
+                    }
+                    # The research loop's steps (tool, input, outcome, cost), when it ran.
+                    | ({"steps": list(self.fallback_qualifier.last_trace)}
+                       if getattr(self.fallback_qualifier, "last_trace", None) else {}),
                 )
             decisions.append(decision)
             self.recorder.record(

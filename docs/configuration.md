@@ -128,9 +128,12 @@ Only used with `--crm hubspot`. See [`docs/hubspot.md`](hubspot.md).
 | `demo` | `--email-verifier` | `none` | `zerobounce` checks every email before the plan. |
 | `demo` | `--email-finder-cents`, `--email-verifier-cents` | `10`, `2` | Budget value of one credit, in cents. Not published prices: set them to your plan's. |
 | `demo` | `--signals` | `none` | `exa` searches the web for dated buying signals per account before qualification (needs `EXA_API_KEY`). See `docs/signals.md`. |
+| `demo` | `--research` | `none` | `exa` researches the accounts the rules return as `insufficient_evidence` in a bounded tool loop (Claude plus Exa; needs `ANTHROPIC_API_KEY` and `EXA_API_KEY`). Cannot be combined with `--agentic`. See `docs/research.md`. |
+| `demo` | `--research-steps` | `6` | Research only: maximum tool calls per account, `submit` included. |
+| `demo` | `--research-exa-millidollars` | `50` | Research only: Exa spend cap per run, in thousandths of a dollar. The LLM cap is `--max-llm-cents`. |
 | `demo`, `runs`, `eval`, `sync` | `--json` | off | Structured output instead of tables. |
 | `demo` | `--max-llm-calls` | `5` | Agentic mode only. Hard cap on LLM calls per run. Past the cap, accounts stay `insufficient_evidence`. |
-| `demo` | `--max-llm-cents` | `50` | Agentic mode only. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |
+| `demo` | `--max-llm-cents` | `50` | Agentic and research modes. Hard cap on LLM spend per run, in cents. A call starts only if its worst case (a high input estimate plus the full output cap) still fits; the actual usage is then charged. Spend cannot exceed the cap. |
 | `demo`, `approve`, `reject`, `sync` | `--example-dir` | bundled example | Directory containing `config/gtm-context.yaml` and `fixtures/`. Point it at your own copy to use your own context and fixtures. |
 | `crm-setup` | `--crm`, `--yes` | `hubspot`, off | Prepares a real CRM for writes (creates the idempotency property). Asks for confirmation unless `--yes`. |
 | all commands | `--state-dir` | `./.gtm-lab-state` | Where run state, the mock CRM, the event log and review artifacts are written. |

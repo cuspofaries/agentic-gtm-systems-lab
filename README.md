@@ -214,9 +214,12 @@ To add another vendor, implement the interface it belongs to (`DiscoveryProvider
 
 ## How agentic is it?
 
-Less than the name promises, on purpose for this version. The pipeline is orchestrated by code: discovery, signal search, contact search, email steps, reconciliation, policies and sync run in a fixed order with fixed rules. Claude makes one kind of decision, the qualification of accounts the rules cannot decide, under call and spend caps, and it is the conversational interface through the `/gtm-lab` skill.
+The pipeline is orchestrated by code: discovery, signal search, contact search, email steps, reconciliation, policies and sync run in a fixed order with fixed rules. Claude acts in two places, both optional and both capped:
 
-There is no agent yet that chooses its own research actions, gathers more evidence when a case is unclear, judges that evidence and changes its plan within a bounded loop. That is the next meaningful step for the "agentic" part; the guardrails here (budget, approval, idempotent writes, audit) are what such a loop would have to run inside.
+- **Undecided accounts.** With `--research exa`, Claude researches each account the rules return as `insufficient_evidence`: it chooses its searches, reads pages, decides when it has enough, and submits a decision with quotes. The code bounds the loop (steps, LLM spend, search spend) and keeps a piece of evidence only if its quote is found in a page Claude actually read. With `--agentic`, Claude decides from the account data alone, without researching. See [`docs/research.md`](docs/research.md).
+- **Conversation.** The `/gtm-lab` skill in Claude Code runs, inspects and explains runs.
+
+Everything else is code. Claude never writes to the CRM: its decisions go into a plan that a person approves, and sync is a separate step.
 
 ## What are the limitations?
 
@@ -267,6 +270,7 @@ agentic-gtm-systems-lab/
 │   ├── pdl.md                    People Data Labs discovery and contacts
 │   ├── email.md                  FullEnrich email finding, ZeroBounce verification
 │   ├── signals.md                Exa buying signals: checks, kinds, budget
+│   ├── research.md               bounded research loop: tools, caps, evidence checks
 │   ├── real-case-test.md         end-to-end test on private real data (record once, replay free)
 │   ├── failure-scenarios.md
 │   ├── integration-guide.md
@@ -302,7 +306,7 @@ agentic-gtm-systems-lab/
 | Salesforce adapter | Planned - not implemented |
 | Labeled benchmark for the LLM step | Planned - not implemented |
 | Dated buying signals (Exa) | Implemented; unit-tested against a fake in CI; run on two real companies |
-| Agent choosing its own research steps in a bounded loop | Not implemented (see [How agentic is it?](#how-agentic-is-it)) |
+| Agent choosing its own research steps in a bounded loop (`--research exa`) | Implemented; tested with a scripted Claude client and a fake Exa in CI; not yet run against the real API |
 
 ## Contributing
 

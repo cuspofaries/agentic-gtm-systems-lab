@@ -109,7 +109,7 @@ Using the skill consumes Claude Code usage like any conversation. In the tests a
 |---|---|---|
 | `/gtm-lab` is not listed | Claude Code was started outside the repository | Start `claude` from the repository root |
 | The skill says the CLI is missing | No `.venv` and no `gtm-lab` on PATH | Accept the proposed install, or run `python -m venv .venv && .venv/bin/pip install -e ".[dev]"` |
-| A `gtm-lab` command asks for permission | Only read-only commands are pre-authorized | Expected for `approve`, `reject`, `sync`, `--agentic` |
+| A `gtm-lab` command asks for permission | Only read-only commands are pre-authorized | Expected for `approve`, `reject`, `sync`, `--agentic`, `--research` |
 | A read command is refused in a non-interactive session | Claude added `cd`, a pipe or a redirection, which no longer matches the permission rule | The skill tells it to run bare commands; it retries without them |
 | `Error: No run '...'` | Wrong run id or state directory | `/gtm-lab inspect` with no id lists runs; check `GTM_LAB_STATE_DIR` |
 | `inspect` output is long | It contains every record and audit event | Claude reads the `summary` block first |
